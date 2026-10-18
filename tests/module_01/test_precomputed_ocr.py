@@ -154,6 +154,30 @@ def test_output_can_be_sibling_folder_within_drive_root(tmp_path: Path) -> None:
     assert (output / "elements.jsonl").is_file()
 
 
+def test_drive_shortcuts_keep_visible_source_refs(tmp_path: Path) -> None:
+    root, json_dir, image_dir, _ = _sample(tmp_path)
+    target_root = tmp_path / "drive" / ".shortcut-targets-by-id" / "example-id"
+    target_root.mkdir(parents=True)
+    for folder in ("Financial_Report_OCR", "Financial_OCR"):
+        source = root / folder
+        target = target_root / folder
+        source.rename(target)
+        try:
+            source.symlink_to(target, target_is_directory=True)
+        except OSError as exc:
+            pytest.skip(f"Directory symlinks unavailable: {exc}")
+
+    output = root / "Financial_MultiAgent_Results" / "AAA" / "2025"
+    manifest = _import(root, json_dir, image_dir, output)
+    assert manifest["pages"][0]["ocr_json_ref"] == "Financial_Report_OCR/AAA/2025/ocr_json/page_1.json"
+    assert manifest["pages"][0]["page_image_ref"] == "Financial_OCR/AAA/2025/page_1.png"
+    ref = "AAA-2025-report/ocr-bundle-v1/p1/table_001/table_001_cell_001"
+    record, image = resolve_source_ref(output, root, ref, access_scope="tenant-a")
+    assert record["text"] == "1.234"
+    assert image == image_dir / "page_1.png"
+    assert image.is_file()
+
+
 def test_bts_2025_sample_when_available(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[2] / "ocr_samples"
     json_dir = root / "Financial_Report_OCR" / "BTS" / "2025" / "ocr_json"

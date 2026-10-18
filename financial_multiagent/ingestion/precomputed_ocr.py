@@ -72,9 +72,12 @@ def _png_dimensions(path: Path) -> tuple[int, int]:
 
 
 def _relative(path: Path, source_root: Path) -> str:
-    resolved = path.resolve()
+    # Keep the visible Drive path: a MyDrive shortcut may resolve to
+    # /content/drive/.shortcut-targets-by-id outside MyDrive.
+    absolute = Path(os.path.abspath(path))
+    root = Path(os.path.abspath(source_root))
     try:
-        return resolved.relative_to(source_root).as_posix()
+        return absolute.relative_to(root).as_posix()
     except ValueError as exc:
         raise OCRBundleError(f"Asset is outside source root: {path}") from exc
 
@@ -106,7 +109,11 @@ def _crop_refs(
             continue
         suffix = parts[parts.index("ocr_crops") + 1 :]
         asset = crop_root.joinpath(*suffix)
-        _relative(asset, crop_root.resolve())
+        _relative(asset, crop_root)
+        try:
+            asset.resolve().relative_to(crop_root.resolve())
+        except ValueError as exc:
+            raise OCRBundleError(f"Crop escapes its source directory: {asset}") from exc
         if not asset.is_file():
             issues.append({"code": "MISSING_CROP", "location": location, "field": key, "expected_ref": _relative(asset, source_root)})
             continue
@@ -224,16 +231,19 @@ def import_ocr_bundle(
     document_version = _identifier(document_version, "document_version")
     if not access_scope.strip():
         raise OCRBundleError("access_scope must be supplied by the caller")
-    json_dir = Path(ocr_json_dir).resolve()
-    image_dir = Path(page_image_dir).resolve()
-    destination = Path(output_dir).resolve()
-    root = Path(source_root).resolve() if source_root is not None else Path(os.path.commonpath([json_dir, image_dir])).resolve()
+    json_dir = Path(os.path.abspath(ocr_json_dir))
+    image_dir = Path(os.path.abspath(page_image_dir))
+    destination = Path(os.path.abspath(output_dir))
+    root = Path(os.path.abspath(source_root)) if source_root is not None else Path(os.path.commonpath([json_dir, image_dir]))
     _relative(json_dir, root)
     _relative(image_dir, root)
     crop_root = json_dir.parent / "ocr_crops"
     source_directories = (json_dir, image_dir, crop_root)
     if any(
         destination == source or destination in source.parents or source in destination.parents
+        or destination.resolve() == source.resolve()
+        or destination.resolve() in source.resolve().parents
+        or source.resolve() in destination.resolve().parents
         for source in source_directories
     ):
         raise OCRBundleError("Output directory must be separate from source JSON, image, and crop directories")
@@ -338,13 +348,13 @@ def resolve_source_ref(
     prefix = f"{manifest['document_id']}/{manifest['document_version']}/"
     if not source_ref.startswith(prefix):
         raise KeyError(source_ref)
-    root = Path(source_root).resolve()
+    root = Path(os.path.abspath(source_root))
     with (output / "elements.jsonl").open(encoding="utf-8") as stream:
         for line in stream:
             record = json.loads(line)
             if record["source_ref"] != source_ref:
                 continue
-            image = (root / record["page_image_ref"]).resolve()
+            image = Path(os.path.abspath(root / record["page_image_ref"]))
             _relative(image, root)
             if not image.is_file():
                 raise OCRBundleError(f"Page image no longer exists: {image}")
