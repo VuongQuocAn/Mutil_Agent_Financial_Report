@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OCR quality report schema v1",
+  "description": "Saved quality_report.json. Each JSONL line uses #/$defs/issue. Runtime contract checks are implemented in Python.",
+  "type": "object",
+  "required": ["schema_version", "validator_version", "report_id", "created_at", "document_id", "document_version", "access_scope", "profile", "execution_status", "quality_status", "visual_accuracy", "source_verification", "input_artifact_sha256", "metrics", "checks", "issues_ref", "issue_counts", "review_issue_count", "trace"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "validator_version": {"type": "string"},
+    "report_id": {"type": "string", "pattern": "^[A-Za-z0-9-]+$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "document_id": {"type": ["string", "null"]},
+    "document_version": {"type": ["string", "null"]},
+    "access_scope": {"type": "string", "minLength": 1},
+    "source_bundle_sha256": {"type": ["string", "null"]},
+    "profile": {"$ref": "#/$defs/profile"},
+    "execution_status": {"enum": ["completed", "failed"]},
+    "quality_status": {"enum": ["checks_passed", "needs_review", "not_assessed"]},
+    "visual_accuracy": {"const": "not_measured"},
+    "source_verification": {"const": "from_adapter_manifest"},
+    "ingestion_status_action": {"const": "unchanged"},
+    "input_artifact_sha256": {
+      "type": "object",
+      "required": ["manifest.json", "elements.jsonl"],
+      "properties": {
+        "manifest.json": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "elements.jsonl": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "metrics": {"type": "object"},
+    "checks": {
+      "type": "object",
+      "required": ["contract", "pages", "text", "numeric", "tables", "confidence", "assets"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "evaluated", "reason"],
+        "properties": {
+          "status": {"enum": ["passed", "flagged", "skipped", "error"]},
+          "evaluated": {"type": "integer", "minimum": 0},
+          "reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "issues_ref": {"const": "quality_issues.jsonl"},
+    "issue_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "review_issue_count": {"type": "integer", "minimum": 0},
+    "trace": {"type": "array", "items": {"type": "object"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"execution_status": {"const": "failed"}}}, "then": {"properties": {"quality_status": {"const": "not_assessed"}}}}
+  ],
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["profile_id", "profile_version", "enabled_checks", "required_checks", "numeric_candidate_pattern", "sparse_page_characters", "confidence_scale", "minimum_confidence"],
+      "properties": {
+        "profile_id": {"type": "string", "minLength": 1},
+        "profile_version": {"type": "string", "minLength": 1},
+        "enabled_checks": {"type": "array", "items": {"type": "string"}},
+        "required_checks": {"type": "array", "items": {"type": "string"}},
+        "numeric_candidate_pattern": {"type": "string"},
+        "sparse_page_characters": {"type": ["integer", "null"], "minimum": 0},
+        "confidence_scale": {"type": ["array", "null"], "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+        "minimum_confidence": {"type": ["number", "null"]}
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["issue_id", "check_id", "code", "severity", "review_required", "page", "source_ref", "reason", "locator", "evidence"],
+      "properties": {
+        "issue_id": {"type": "string"},
+        "check_id": {"enum": ["contract", "pages", "text", "numeric", "tables", "confidence", "assets"]},
+        "code": {"type": "string"},
+        "severity": {"enum": ["info", "warning", "error"]},
+        "review_required": {"type": "boolean"},
+        "page": {"type": ["integer", "null"], "minimum": 1},
+        "source_ref": {"type": ["string", "null"]},
+        "reason": {"type": "string"},
+        "locator": {"type": ["string", "null"]},
+        "evidence": {"type": "object"}
+      }
+    }
+  }
+}
