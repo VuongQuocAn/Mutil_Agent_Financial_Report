@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "financial-multiagent-handoff"
+version = "0.1.0"
+description = "Vietnamese financial pipeline: ingestion, evidence and contextual validation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+financial-c1 = "financial_multiagent.validation.c1.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["financial_multiagent*"]
+
+[tool.setuptools.package-data]
+"financial_multiagent.ingestion" = ["*.json"]
+"financial_multiagent.validation.c1" = ["profiles/*.json", "schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

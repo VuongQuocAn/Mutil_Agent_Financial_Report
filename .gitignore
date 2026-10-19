@@ -11,6 +11,9 @@ client_secret*.json
 *.db
 *.sqlite
 artifacts/
+build/
+dist/
+*.egg-info/
 Financial_OCR/
 Financial_Report_OCR/
 Financial_MultiAgent_Results/
