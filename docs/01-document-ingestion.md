@@ -4,6 +4,10 @@
 **Tài liệu cha:** [Level 0](00-overview.md) · **Quy chuẩn:** [Technical Writing Standard](TECHNICAL_WRITING_STANDARD.md)  
 **Liên quan:** [C2 và kho tri thức — dự kiến](02-knowledge-and-graph.md), [truy vấn và retrieval — dự kiến](03-query-and-retrieval.md), [C5 — dự kiến](06-evaluation-monitoring.md)
 
+**Thiết kế và tiến độ bước quality:** [OCRQualityReport](01a-ocr-quality-report-plan.md).
+
+**Cập nhật triển khai OCR quality:** đã có [validator v1](../financial_multiagent/ingestion/ocr_quality.py) và [notebook trong colab/](../colab/01_ocr_quality_report.ipynb). Validator đọc artifact adapter, ghi quality report versioned và không tự nâng document lên `ready`; normalization/regulation/C1 vẫn chưa triển khai. Bộ test Module 1 hiện đạt 41 passed, 2 skipped; kết quả/giới hạn lần chạy BTS local được ghi trong [kế hoạch quality](01a-ocr-quality-report-plan.md#9-acceptance-criteria-và-test-dự-kiến). Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
+
 ## 1. Mục tiêu và trách nhiệm
 
 **Luồng và mục đích.** Kiến trúc mục tiêu nhận nhiều PDF báo cáo tài chính và, khi được cung cấp, PDF/văn bản quy định cùng metadata hoặc validation profile; giữ nguyên bản gốc; tạo bằng chứng có tham chiếu nguồn; chuẩn hóa dữ liệu; chạy **C1 Context-Aware Regulatory Compliance Validation**; rồi bàn giao các artifact theo phiên bản cho Knowledge Storage. Tệp tải thêm trong phiên Online cũng quay vào luồng này trước khi được truy xuất (**Đã chốt — D03, D04**). **Đề xuất đường nhập dữ liệu lịch sử:** nhận bộ `page_x.json` và ảnh trang PNG đã OCR, giữ nguyên các artifact đó và đi vào cùng bước quality validation/normalization/C1 mà không chạy OCR lại.
@@ -398,7 +402,7 @@ Các chữ ký là **Đề xuất giao diện**, không phải mã nguồn. `Acc
 | Service `OCRBundleValidator.validate(manifest, access_context)` | JSON/PNG refs → page coverage, ID/bbox/path issues; không sửa JSON gốc. | Kiểm ACL trước khi đọc; thiếu trang/ảnh, JSON sai hoặc bbox ngoài ảnh → issue có page ref. |
 | Service `PrecomputedOcrAdapter.load(manifest, run_id, access_context)` | `page_x.json` + ảnh trang → `OCRBlock`/`Table`/cell/source assets với `source_ref` ổn định; ghi checkpoint. | Không gọi OCR engine; xử lý từng trang, idempotent theo source version/run; không suy ra PDF hash/ACL từ tên thư mục. |
 | Service `SourceAssetResolver.resolve(source_ref, access_context)` | Ref logic → JSON/ảnh/crop trên local/Drive/storage; không đổi ref khi đổi môi trường. | Kiểm ACL ở tầng dữ liệu; đường dẫn Colab tuyệt đối được ánh xạ sang ref tương đối, không công bố path nội bộ. |
-| Pure tool `OCRQualityValidator.assess(blocks, tables, profile)` | OCR artifacts → quality report/issues. | Ngưỡng `TBD`; không đọc kết quả kế toán làm proxy. |
+| Pure tool `OCRQualityValidator.assess(manifest, records, profile)` | Artifact adapter → `OCRQualityReport` với metrics/checks/issues; đã có code v1. | Ngưỡng cần hiệu chỉnh; không đọc kết quả kế toán làm proxy. |
 | Pure tool `FinancialNormalizer.normalize(cells, metadata, ontology)` | Cells → FinancialFact candidates/issues. | Giữ raw value; ambiguous unit/period → review. |
 | Service `RegulationExtractor.extract(legal_blocks, profile)` | Điều/khoản → Regulation candidates/chunks. | Không suy diễn hiệu lực; thiếu thông tin → unknown/review. |
 | Pure tool `FinancialConsistencyValidator.check(facts, statements)` | Facts → structural/accounting/cross-document checks. | Tính bằng logic xác định, kiểm kỳ/đơn vị/scope trước phép tính. |
