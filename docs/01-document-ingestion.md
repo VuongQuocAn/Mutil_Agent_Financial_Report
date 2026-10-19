@@ -1,12 +1,16 @@
 # Level 1 — Document Ingestion, OCR, Normalization và C1 Validation
 
-**Loại tài liệu:** Technical Design Specification · **Trạng thái:** kiến trúc mục tiêu; đã triển khai và kiểm thử adapter OCR lịch sử cục bộ, các thành phần ingestion/C1 còn lại `Chưa xác nhận`  
+**Loại tài liệu:** Technical Design Specification · **Trạng thái:** kiến trúc mục tiêu; đã có adapter, quality checks và normalization một bảng; full ingestion/C1 còn chưa hoàn tất.
 **Tài liệu cha:** [Level 0](00-overview.md) · **Quy chuẩn:** [Technical Writing Standard](TECHNICAL_WRITING_STANDARD.md)  
 **Liên quan:** [C2 và kho tri thức — dự kiến](02-knowledge-and-graph.md), [truy vấn và retrieval — dự kiến](03-query-and-retrieval.md), [C5 — dự kiến](06-evaluation-monitoring.md)
 
 **Thiết kế và tiến độ bước quality:** [OCRQualityReport](01a-ocr-quality-report-plan.md).
 
-**Cập nhật triển khai OCR quality:** đã có [validator v1](../financial_multiagent/ingestion/ocr_quality.py) và [notebook trong colab/](../colab/01_ocr_quality_report.ipynb). Validator đọc artifact adapter, ghi quality report versioned và không tự nâng document lên `ready`; normalization/regulation/C1 vẫn chưa triển khai. Bộ test Module 1 hiện đạt 41 passed, 2 skipped; kết quả/giới hạn lần chạy BTS local được ghi trong [kế hoạch quality](01a-ocr-quality-report-plan.md#9-acceptance-criteria-và-test-dự-kiến). Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
+**Bước normalization đã có:** [lát cắt một bảng kết quả kinh doanh](01b-financial-normalization.md) và [notebook 02](../colab/02_financial_normalization.ipynb). Đây là candidate contract với metadata nullable và decimal ở đơn vị cơ sở; schema published rút gọn bên dưới chưa phải hợp đồng cuối. Full VAS/IFRS/restatement mapping, financial consistency và regulation/C1 còn cần triển khai.
+
+**Kiểm thử hiện tại:** `python -m pytest tests/module_01 -q -rs` đạt 85 passed, 2 skipped. Hai skip là ca adapter cần symlink Windows và ca cần ảnh BTS ở đường dẫn cũ; quality/normalization BTS vẫn test bằng artifact đã nhập. Notebook normalization chưa được chạy trên Drive thay người dùng.
+
+**Cập nhật triển khai:** đã có [quality validator v1](../financial_multiagent/ingestion/ocr_quality.py) và normalization lát cắt mô tả ở trên. Không tự nâng document lên `ready`; regulation/C1 còn chưa triển khai. Kết quả/giới hạn lần chạy BTS local ghi trong [quality](01a-ocr-quality-report-plan.md#9-acceptance-criteria-và-test-dự-kiến) và [normalization](01b-financial-normalization.md#9-acceptance-criteria-và-test-cases). Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
 
 ## 1. Mục tiêu và trách nhiệm
 
@@ -403,7 +407,7 @@ Các chữ ký là **Đề xuất giao diện**, không phải mã nguồn. `Acc
 | Service `PrecomputedOcrAdapter.load(manifest, run_id, access_context)` | `page_x.json` + ảnh trang → `OCRBlock`/`Table`/cell/source assets với `source_ref` ổn định; ghi checkpoint. | Không gọi OCR engine; xử lý từng trang, idempotent theo source version/run; không suy ra PDF hash/ACL từ tên thư mục. |
 | Service `SourceAssetResolver.resolve(source_ref, access_context)` | Ref logic → JSON/ảnh/crop trên local/Drive/storage; không đổi ref khi đổi môi trường. | Kiểm ACL ở tầng dữ liệu; đường dẫn Colab tuyệt đối được ánh xạ sang ref tương đối, không công bố path nội bộ. |
 | Pure tool `OCRQualityValidator.assess(manifest, records, profile)` | Artifact adapter → `OCRQualityReport` với metrics/checks/issues; đã có code v1. | Ngưỡng cần hiệu chỉnh; không đọc kết quả kế toán làm proxy. |
-| Pure tool `FinancialNormalizer.normalize(cells, metadata, ontology)` | Cells → FinancialFact candidates/issues. | Giữ raw value; ambiguous unit/period → review. |
+| Pure tool `FinancialNormalizer.normalize(manifest, records, page, table_id, context)` | Một bảng kết quả kinh doanh → FinancialFact candidates/issues; đã có code v1. | Giữ raw; unit/period/scope mơ hồ → review; full normalization theo D06 còn cần mở rộng. |
 | Service `RegulationExtractor.extract(legal_blocks, profile)` | Điều/khoản → Regulation candidates/chunks. | Không suy diễn hiệu lực; thiếu thông tin → unknown/review. |
 | Pure tool `FinancialConsistencyValidator.check(facts, statements)` | Facts → structural/accounting/cross-document checks. | Tính bằng logic xác định, kiểm kỳ/đơn vị/scope trước phép tính. |
 | Service `C1Validator.validate(facts, rules, profile)` | Facts + rule versions → C1 results; ghi check trace. | Kiểm applicability/effective dates/exceptions; violation cần dual provenance. |

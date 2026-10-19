@@ -10,4 +10,6 @@ Mỗi lần chạy lưu ba file trong `quality/<run-id>/`: `quality_report.json`
 
 Code chính: [ocr_quality.py](../financial_multiagent/ingestion/ocr_quality.py). Contract: [schema v1](../financial_multiagent/ingestion/ocr_quality.schema.json). Thiết kế và giới hạn: [kế hoạch quality](../docs/01a-ocr-quality-report-plan.md).
 
+Sau quality, mở [02_financial_normalization.ipynb](02_financial_normalization.ipynb) để chuẩn hóa một bảng kết quả kinh doanh (mặc định BTS/2025 trang 12). Notebook dùng bundle hiện có, ghi `normalization/<run-id>/`. Để scope và period overrides trống cho đến khi xác nhận từ tài liệu; kết quả có thể có `needs_review` dù giá trị số đã được chuyển đúng. Xem [thiết kế normalization](../docs/01b-financial-normalization.md).
+
 Khi có code mới trên GitHub, chạy lại ô clone/pull: ô này reload module trong kernel. Thư mục `/content` là nơi tạm của Colab; output trong Drive được giữ lại. Notebook được commit không chứa output hoặc thông tin xác thực.
