@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "C1ValidationResult v1",
+  "type": "object",
+  "required": ["check_id", "category", "name", "outcome", "reason", "fact_ids", "financial_source_refs", "legal_source_refs", "rule_id", "rule_version", "applicability", "details", "verification_stage"],
+  "properties": {
+    "check_id": {"type": "string"},
+    "category": {"enum": ["structural", "accounting", "cross_document", "regulatory", "disclosure", "coverage"]},
+    "name": {"type": "string"},
+    "outcome": {"enum": ["pass", "warning", "unknown", "not_applicable", "violation"]},
+    "reason": {"type": "string"},
+    "fact_ids": {"type": "array", "items": {"type": "string"}},
+    "financial_source_refs": {"type": "array", "items": {"type": "string"}},
+    "legal_source_refs": {"type": "array", "items": {"type": "string"}},
+    "rule_id": {"type": ["string", "null"]},
+    "rule_version": {"type": ["string", "null"]},
+    "applicability": {"enum": [null, "applicable", "unknown", "not_applicable"]},
+    "details": {"type": "object"},
+    "verification_stage": {"const": "offline_c1"}
+  },
+  "allOf": [{
+    "if": {"properties": {"outcome": {"const": "violation"}}},
+    "then": {"properties": {
+      "category": {"enum": ["regulatory", "disclosure"]},
+      "financial_source_refs": {"minItems": 1}, "legal_source_refs": {"minItems": 1},
+      "rule_id": {"type": "string", "minLength": 1}, "rule_version": {"type": "string", "minLength": 1},
+      "applicability": {"const": "applicable"}
+    }}
+  }]
+}

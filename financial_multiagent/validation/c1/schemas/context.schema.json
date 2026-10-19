@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "C1 validation context v1",
+  "type": "object",
+  "required": ["schema_version", "access_scope", "entity_attributes", "disclosures"],
+  "properties": {
+    "schema_version": {"const": "1"}, "access_scope": {"type": "string"},
+    "entity_attributes": {"type": "object", "additionalProperties": {
+      "type": "object", "properties": {"entity_type": {"type": "string"}, "industry": {"type": "string"}}, "additionalProperties": false
+    }},
+    "disclosures": {"type": "array", "items": {
+      "type": "object",
+      "required": ["access_scope", "document_id", "document_version", "company_id", "period_start", "period_end", "consolidation_scope", "requirement_key", "status", "coverage", "review_state", "reviewed_by", "review_note", "financial_source_refs"],
+      "properties": {
+        "access_scope": {"type": "string"}, "document_id": {"type": "string"}, "document_version": {"type": "string"},
+        "company_id": {"type": "string"}, "period_start": {"type": "string", "format": "date"},
+        "period_end": {"type": "string", "format": "date"}, "consolidation_scope": {"enum": ["standalone", "consolidated"]},
+        "requirement_key": {"type": "string", "minLength": 1}, "status": {"enum": ["present", "absent", "unknown"]},
+        "coverage": {"enum": ["complete_reviewed", "partial"]}, "review_state": {"enum": ["accepted", "needs_review"]},
+        "reviewed_by": {"type": "string", "minLength": 1}, "review_note": {"type": "string", "minLength": 1},
+        "financial_source_refs": {"type": "array", "items": {"type": "string"}}
+      }
+    }}
+  }
+}

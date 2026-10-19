@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Curated C1 rule registry v1",
+  "type": "object",
+  "required": ["schema_version", "access_scope", "sources", "rules"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "access_scope": {"type": "string", "minLength": 1},
+    "sources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+    "rules": {"type": "array", "items": {"$ref": "#/$defs/rule"}}
+  },
+  "$defs": {
+    "condition": {
+      "type": "object", "required": ["field", "values"],
+      "properties": {
+        "field": {"enum": ["company_id", "consolidation_scope", "accounting_basis", "entity_type", "industry"]},
+        "values": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["document_id", "document_version", "article_ref", "source_ref", "text", "text_sha256", "source_uri", "source_kind", "review_state", "access_scope"],
+      "properties": {
+        "document_id": {"type": "string", "minLength": 1},
+        "document_version": {"type": "string", "minLength": 1},
+        "article_ref": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "text": {"type": "string", "minLength": 1},
+        "text_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_uri": {"type": "string", "minLength": 1},
+        "source_kind": {"enum": ["legal_text", "synthetic"]},
+        "review_state": {"enum": ["accepted", "needs_review"]},
+        "access_scope": {"type": "string"}
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["rule_id", "rule_version", "access_scope", "review_state", "effective_from", "effective_to", "open_ended", "applicability", "exceptions", "legal_source_refs", "predicate"],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1},
+        "rule_version": {"type": "string", "minLength": 1},
+        "access_scope": {"type": "string"},
+        "review_state": {"enum": ["accepted", "needs_review"]},
+        "effective_from": {"type": ["string", "null"], "format": "date"},
+        "effective_to": {"type": ["string", "null"], "format": "date"},
+        "open_ended": {"type": "boolean"},
+        "ontology_version": {"type": ["string", "null"]},
+        "applicability": {"type": ["array", "null"], "items": {"$ref": "#/$defs/condition"}},
+        "exceptions": {"type": ["array", "null"], "items": {"type": "object", "required": ["conditions"], "properties": {"conditions": {"type": "array", "items": {"$ref": "#/$defs/condition"}}}}},
+        "legal_source_refs": {"type": "array", "items": {"type": "string"}},
+        "predicate": {"oneOf": [
+          {"type": "object", "required": ["kind", "metric_code", "operator", "threshold", "unit"], "properties": {
+            "kind": {"const": "metric_comparison"}, "metric_code": {"type": "string"},
+            "operator": {"enum": ["eq", "ge", "gt", "le", "lt"]}, "threshold": {"type": "string"}, "unit": {"type": "string"}
+          }},
+          {"type": "object", "required": ["kind", "requirement_key"], "properties": {
+            "kind": {"const": "required_disclosure"}, "requirement_key": {"type": "string", "minLength": 1}
+          }}
+        ]}
+      }
+    }
+  }
+}

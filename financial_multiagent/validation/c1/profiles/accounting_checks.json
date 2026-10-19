@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "profile_id": "accounting-identities-1",
+  "description": "Configured accounting identities, not legal obligations. Missing inputs remain unknown; no implicit zero.",
+  "checks": [
+    {"check_id": "revenue_net", "lhs": "revenue_net", "terms": {"revenue_gross": "1", "revenue_deductions": "-1"}},
+    {"check_id": "gross_profit", "lhs": "gross_profit", "terms": {"revenue_net": "1", "cost_of_sales": "-1"}},
+    {"check_id": "operating_profit", "lhs": "operating_profit", "terms": {"gross_profit": "1", "finance_income": "1", "finance_cost": "-1", "selling_expense": "-1", "administrative_expense": "-1"}},
+    {"check_id": "other_profit", "lhs": "other_profit", "terms": {"other_income": "1", "other_expense": "-1"}},
+    {"check_id": "profit_before_tax", "lhs": "profit_before_tax", "terms": {"operating_profit": "1", "other_profit": "1"}},
+    {"check_id": "profit_after_tax", "lhs": "profit_after_tax", "terms": {"profit_before_tax": "1", "income_tax_current": "-1", "income_tax_deferred": "-1"}},
+    {"check_id": "balance_sheet", "lhs": "assets_total", "terms": {"liabilities_total": "1", "equity_total": "1"}},
+    {"check_id": "cash_bridge", "lhs": "cash_closing", "terms": {"cash_opening": "1", "cash_net_change": "1", "cash_fx_effect": "1"}}
+  ]
+}
