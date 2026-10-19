@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FinancialFact candidate v1",
+  "description": "Each financial_facts.jsonl line. Missing context is represented by null and needs_review. This is not the final published FinancialFact schema.",
+  "type": "object",
+  "required": ["fact_id", "document_id", "document_version", "access_scope", "company_id", "metric_code", "ontology_version", "raw_label", "statement_code", "raw_value", "parsed_value", "value", "raw_unit", "unit", "unit_multiplier", "fiscal_period", "period_start", "period_end", "period_kind", "consolidation_scope", "source_ref", "context_refs", "metadata_evidence", "ocr_quality_issues", "normalization_issues", "quality_state"],
+  "properties": {
+    "fact_id": {"type": "string"},
+    "document_id": {"type": "string"},
+    "document_version": {"type": "string"},
+    "access_scope": {"type": "string", "minLength": 1},
+    "company_id": {"type": ["string", "null"]},
+    "metric_code": {"type": ["string", "null"]},
+    "ontology_version": {"type": "string"},
+    "raw_label": {"type": "string"},
+    "statement_code": {"type": "string"},
+    "raw_value": {"type": "string"},
+    "parsed_value": {"type": ["string", "null"], "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "value": {"type": ["string", "null"], "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"},
+    "raw_unit": {"enum": [null, "VND", "thousand_VND", "million_VND", "billion_VND", "VND/share"]},
+    "unit": {"enum": [null, "VND", "VND/share"]},
+    "unit_multiplier": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+    "fiscal_period": {"type": ["string", "null"]},
+    "period_start": {"type": ["string", "null"], "format": "date"},
+    "period_end": {"type": ["string", "null"], "format": "date"},
+    "period_kind": {"const": "duration"},
+    "consolidation_scope": {"enum": [null, "standalone", "consolidated"]},
+    "accounting_basis": {"enum": [null, "VAS", "IFRS"]},
+    "restatement_status": {"enum": ["not_assessed", "needs_review"]},
+    "source_ref": {"type": "string"},
+    "context_refs": {"type": "object", "additionalProperties": {"type": "array", "items": {"type": "string"}}},
+    "metadata_evidence": {"type": "object"},
+    "ocr_quality_issues": {"type": "array", "items": {"type": "object"}},
+    "normalization_issues": {"type": "array", "items": {"type": "string"}},
+    "quality_state": {"enum": ["normalized_candidate", "needs_review"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"quality_state": {"const": "normalized_candidate"}}},
+      "then": {"properties": {
+        "company_id": {"type": "string"}, "metric_code": {"type": "string"},
+        "value": {"type": "string"}, "unit": {"type": "string"},
+        "period_start": {"type": "string"}, "period_end": {"type": "string"},
+        "consolidation_scope": {"type": "string"}, "normalization_issues": {"maxItems": 0}
+      }}
+    }
+  ]
+}
