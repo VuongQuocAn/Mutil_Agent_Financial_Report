@@ -1,16 +1,20 @@
 # Level 1 — Document Ingestion, OCR, Normalization và C1 Validation
 
-**Loại tài liệu:** Technical Design Specification · **Trạng thái:** kiến trúc mục tiêu; đã có adapter, quality checks và normalization một bảng; full ingestion/C1 còn chưa hoàn tất.
+**Loại tài liệu:** Technical Design Specification · **Trạng thái:** đã có adapter, quality, normalization một bảng và engine C1; full ingestion, nguồn rule production và tích hợp kho tri thức còn chưa hoàn tất.
 **Tài liệu cha:** [Level 0](00-overview.md) · **Quy chuẩn:** [Technical Writing Standard](TECHNICAL_WRITING_STANDARD.md)  
 **Liên quan:** [C2 và kho tri thức — dự kiến](02-knowledge-and-graph.md), [truy vấn và retrieval — dự kiến](03-query-and-retrieval.md), [C5 — dự kiến](06-evaluation-monitoring.md)
 
 **Thiết kế và tiến độ bước quality:** [OCRQualityReport](01a-ocr-quality-report-plan.md).
 
-**Bước normalization đã có:** [lát cắt một bảng kết quả kinh doanh](01b-financial-normalization.md) và [notebook 02](../colab/02_financial_normalization.ipynb). Đây là candidate contract với metadata nullable và decimal ở đơn vị cơ sở; schema published rút gọn bên dưới chưa phải hợp đồng cuối. Full VAS/IFRS/restatement mapping, financial consistency và regulation/C1 còn cần triển khai.
+**Bước normalization đã có:** [lát cắt một bảng kết quả kinh doanh](01b-financial-normalization.md) và [notebook 02](../colab/02_financial_normalization.ipynb). Đây là candidate contract với metadata nullable và decimal ở đơn vị cơ sở; schema published rút gọn bên dưới chưa phải hợp đồng cuối. Full VAS/IFRS/restatement mapping và rule extraction còn cần triển khai; engine financial consistency/C1 đã có ở tài liệu con bên dưới.
 
 **Kiểm thử hiện tại:** `python -m pytest tests/module_01 -q -rs` đạt 85 passed, 2 skipped. Hai skip là ca adapter cần symlink Windows và ca cần ảnh BTS ở đường dẫn cũ; quality/normalization BTS vẫn test bằng artifact đã nhập. Notebook normalization chưa được chạy trên Drive thay người dùng.
 
-**Cập nhật triển khai:** đã có [quality validator v1](../financial_multiagent/ingestion/ocr_quality.py) và normalization lát cắt mô tả ở trên. Không tự nâng document lên `ready`; regulation/C1 còn chưa triển khai. Kết quả/giới hạn lần chạy BTS local ghi trong [quality](01a-ocr-quality-report-plan.md#9-acceptance-criteria-và-test-dự-kiến) và [normalization](01b-financial-normalization.md#9-acceptance-criteria-và-test-cases). Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
+**C1 đã có:** [thiết kế và giới hạn](01c-c1-validation.md), [notebook 03](../colab/03_c1_validation.ipynb), [cấu trúc repo](07-repository-structure.md). Sáu thành phần C1 được giữ; pháp lý nhận registry có review/provenance, default rỗng trả unknown. Rule extraction tự động và publish vào C2 còn cần triển khai. Các trạng thái “chưa triển khai” bên dưới mô tả lịch sử hoặc kiến trúc đích; đây là cập nhật hiện hành của C1.
+
+**Kiểm thử toàn repo sau C1:** 148 passed, 2 skipped. BTS local có 18 checks unknown và 10 numeric diagnostics residual 0; unknown không được chuyển thành pass chỉ vì phép tính số học khớp.
+
+**Cập nhật triển khai:** đã có quality validator, normalization lát cắt và C1 mô tả ở trên. Không tự nâng document lên `ready`; regulation extraction và nguồn rule production còn chưa có. Kết quả/giới hạn BTS local ghi trong các tài liệu con. Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
 
 ## 1. Mục tiêu và trách nhiệm
 
@@ -338,7 +342,7 @@ Manifest thực tế phải liệt kê **đủ 37 trang**; `demo-scope`, ID và 
       "required": ["check_id", "outcome", "fact_ids", "financial_source_refs", "legal_source_refs", "reason"],
       "properties": {
         "check_id": {"type": "string"},
-        "outcome": {"enum": ["pass", "violation", "warning", "unknown", "needs_review"]},
+        "outcome": {"enum": ["pass", "violation", "warning", "unknown", "needs_review", "not_applicable"]},
         "fact_ids": {"type": "array", "items": {"type": "string"}},
         "rule_id": {"type": ["string", "null"]},
         "rule_version": {"type": ["string", "null"]},
@@ -410,7 +414,7 @@ Các chữ ký là **Đề xuất giao diện**, không phải mã nguồn. `Acc
 | Pure tool `FinancialNormalizer.normalize(manifest, records, page, table_id, context)` | Một bảng kết quả kinh doanh → FinancialFact candidates/issues; đã có code v1. | Giữ raw; unit/period/scope mơ hồ → review; full normalization theo D06 còn cần mở rộng. |
 | Service `RegulationExtractor.extract(legal_blocks, profile)` | Điều/khoản → Regulation candidates/chunks. | Không suy diễn hiệu lực; thiếu thông tin → unknown/review. |
 | Pure tool `FinancialConsistencyValidator.check(facts, statements)` | Facts → structural/accounting/cross-document checks. | Tính bằng logic xác định, kiểm kỳ/đơn vị/scope trước phép tính. |
-| Service `C1Validator.validate(facts, rules, profile)` | Facts + rule versions → C1 results; ghi check trace. | Kiểm applicability/effective dates/exceptions; violation cần dual provenance. |
+| Pure service `C1Validator.validate(facts, access_scope, financial_sources, registry, context, profile)` | Facts + source catalogs + rule versions → C1 results; đã có code v1. | Kiểm applicability/effective dates/exceptions; violation cần dual provenance; runner kiểm scope/hash/replay trước khi gọi. |
 | Service `ArtifactPublisher.publish(manifest, access_context)` | Artifacts → per-store receipts + availability status. | Ghi có phiên bản và idempotent; chỉ nâng `ready` sau ack bắt buộc `TBD`. |
 
 Tool C3 về fact/metric, graph, semantic retrieval và calculator được thiết kế ở module Online; ingestion chỉ sản sinh input có kiểu và provenance cho các tool đó. C5 nhận trace từ mỗi stage; không ghi thông tin nhạy cảm vượt ACL trong log.
@@ -518,6 +522,8 @@ stateDiagram-v2
 - [ ] Xây OCR/layout/table/legal clause parsing với page/table/cell/article provenance và quality report riêng.
 - [ ] Xây chuẩn hóa locale/đơn vị/kỳ/scope/restatement/VAS–IFRS, giữ giá trị gốc và trạng thái review.
 - [ ] Xây rule extraction, applicability/effective-date check, deterministic financial consistency validator và C1 dual-provenance results.
+- [x] Có C1 engine v1, source replay, context/applicability/exceptions, accounting/cross-document/disclosure checks và dual-provenance gate; test local.
+- [ ] Cấp rule production được duyệt, mở rộng normalization/coverage và rule extraction để hoàn tất dòng công việc C1 đích ở trên.
 - [ ] Tích hợp structured/vector/rule registry/C2 qua versioned manifest, ack và invalidation; kiểm ACL ở mọi tầng đọc.
 - [ ] Bổ sung trace C5, retry/idempotency, resume sau reset và công cụ kiểm tra artifact lỗi.
 - [ ] Hoàn thiện test T01–T16 và rà lại AC-01–AC-11 bằng fixture phù hợp; test adapter hiện có 12 ca đạt trên môi trường có mẫu BTS.

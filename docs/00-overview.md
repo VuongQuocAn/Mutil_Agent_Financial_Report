@@ -89,7 +89,7 @@ C5 theo dõi độ đúng của phát hiện tuân thủ và khả năng áp d�
 
 ## Tài liệu con dự kiến
 
-Tài liệu ingestion đã được viết theo yêu cầu tiếp theo; các tài liệu còn lại vẫn là kế hoạch Level 1–2, **chưa có nội dung**:
+Tài liệu ingestion có các tài liệu con về quality, normalization và [C1](01c-c1-validation.md). Đã có [cấu trúc repository](07-repository-structure.md); các module 02–06 dưới đây vẫn là kế hoạch Level 1–2:
 
 | Level 1 | Phạm vi |
 |---|---|
@@ -99,6 +99,6 @@ Tài liệu ingestion đã được viết theo yêu cầu tiếp theo; các tà
 | [04-multi-agent.md](04-multi-agent.md) | C3, tác nhân, điều phối và hợp đồng dữ liệu |
 | [05-verification-and-output.md](05-verification-and-output.md) | C4, ledger, firewall, ba loại đầu ra |
 | [06-evaluation-monitoring.md](06-evaluation-monitoring.md) | C5, benchmark, trace, ablation, bảo trì |
-| [07-implementation.md](07-implementation.md) | Hợp đồng dữ liệu, module, lộ trình triển khai, TBD |
+| [07-repository-structure.md](07-repository-structure.md) | Đã có ranh giới package và folder; lộ trình triển khai đầy đủ còn TBD |
 
 Nguồn kiến trúc: [sơ đồ tham chiếu](../context/architecture-reference.png), [PROJECT_CONTEXT](../context/PROJECT_CONTEXT.md), [ARCHITECTURE_DECISIONS](../context/ARCHITECTURE_DECISIONS.md).

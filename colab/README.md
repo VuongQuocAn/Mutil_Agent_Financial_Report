@@ -12,4 +12,6 @@ Code chính: [ocr_quality.py](../financial_multiagent/ingestion/ocr_quality.py).
 
 Sau quality, mở [02_financial_normalization.ipynb](02_financial_normalization.ipynb) để chuẩn hóa một bảng kết quả kinh doanh (mặc định BTS/2025 trang 12). Notebook dùng bundle hiện có, ghi `normalization/<run-id>/`. Để scope và period overrides trống cho đến khi xác nhận từ tài liệu; kết quả có thể có `needs_review` dù giá trị số đã được chuyển đúng. Xem [thiết kế normalization](../docs/01b-financial-normalization.md).
 
+Tiếp theo mở [03_c1_validation.ipynb](03_c1_validation.ipynb), liệt kê và chọn rõ `NORMALIZATION_RUN_ID`. Nếu chỉ có một run có thể để None; nhiều run yêu cầu chọn, không tự lấy latest. C1 ghi `c1/<run-id>/`, kiểm lại hash và replay normalization. Registry/context mặc định None; pháp lý trả unknown khi chưa có rule được duyệt. Dữ kiện thiếu metadata vẫn unknown, chẩn đoán phép tính không nâng thành pass. Xem [C1](../docs/01c-c1-validation.md).
+
 Khi có code mới trên GitHub, chạy lại ô clone/pull: ô này reload module trong kernel. Thư mục `/content` là nơi tạm của Colab; output trong Drive được giữ lại. Notebook được commit không chứa output hoặc thông tin xác thực.
