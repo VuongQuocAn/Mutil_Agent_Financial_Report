@@ -279,7 +279,7 @@ def _process_one(store: DriveStore, ticker: str, year: str, *, ocr_year: str,
         manifest = import_ocr_bundle(
             json_dir, image_dir, bundle, document_id=f"{ticker}-{year}-report",
             document_version=f"drive-{source_fingerprint[:16]}", access_scope=access_scope,
-            source_root=source_root, validate_crops=False,
+            source_root=source_root, validate_crops=False, tolerate_out_of_page=True,
         )
         _write_json(bundle / "drive_source_map.json", source_map)
         quality = assess_ocr_bundle(bundle, access_scope=access_scope)

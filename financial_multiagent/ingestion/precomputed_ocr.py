@@ -136,6 +136,7 @@ def _records_for_page(
     image_ref: str, json_ref: str, document_id: str, document_version: str,
     access_scope: str, crop_root: Path, source_root: Path, issues: list[dict[str, Any]],
     validate_crops: bool,
+    tolerate_out_of_page: bool,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen_elements: set[str] = set()
@@ -150,6 +151,14 @@ def _records_for_page(
         if not element_type:
             raise OCRBundleError(f"Missing element type on page {number}: {element_id}")
         prefix = f"{document_id}/{document_version}/p{number}"
+        try:
+            element_bbox = _bbox(element.get("bbox"), width, height, f"p{number}/{element_id}")
+        except OCRBundleError as exc:
+            if not tolerate_out_of_page or "BBox outside page" not in str(exc):
+                raise
+            issues.append({"code": "BBOX_OUTSIDE_PAGE", "location": f"p{number}/{element_id}",
+                           "raw_bbox": element.get("bbox"), "source_ref": f"{prefix}/{element_id}"})
+            continue
         base: dict[str, Any] = {
             "kind": "table" if element_type == "table" else "ocr_block" if element_type == "text" else "visual_element",
             "source_type": element_type,
@@ -159,7 +168,7 @@ def _records_for_page(
             "access_scope": access_scope,
             "page": number,
             "element_id": element_id,
-            "bbox": _bbox(element.get("bbox"), width, height, f"p{number}/{element_id}"),
+            "bbox": element_bbox,
             "text": element.get("text"),
             "ocr_confidence": element.get("confidence"),
             "page_image_ref": image_ref,
@@ -175,7 +184,7 @@ def _records_for_page(
             cells = element.get("cells", [])
             if not isinstance(cells, list):
                 raise OCRBundleError(f"Invalid cells at p{number}/{element_id}")
-            base["cell_count"] = len(cells)
+            base["cell_count"] = 0
         records.append(base)
         if element_type != "table":
             continue
@@ -190,6 +199,14 @@ def _records_for_page(
             row, col = cell.get("row"), cell.get("col")
             if isinstance(row, bool) or not isinstance(row, int) or row < 0 or isinstance(col, bool) or not isinstance(col, int) or col < 0:
                 raise OCRBundleError(f"Invalid row/col at p{number}/{element_id}/{cell_id}")
+            try:
+                cell_bbox = _bbox(cell.get("bbox"), width, height, f"p{number}/{element_id}/{cell_id}")
+            except OCRBundleError as exc:
+                if not tolerate_out_of_page or "BBox outside page" not in str(exc):
+                    raise
+                issues.append({"code": "BBOX_OUTSIDE_PAGE", "location": f"p{number}/{element_id}/{cell_id}",
+                               "raw_bbox": cell.get("bbox"), "source_ref": f"{prefix}/{element_id}/{cell_id}"})
+                continue
             records.append({
                 "kind": "table_cell",
                 "source_type": "table_cell",
@@ -202,7 +219,7 @@ def _records_for_page(
                 "cell_id": cell_id,
                 "row": row,
                 "col": col,
-                "bbox": _bbox(cell.get("bbox"), width, height, f"p{number}/{element_id}/{cell_id}"),
+                "bbox": cell_bbox,
                 "text": cell.get("text"),
                 "ocr_confidence": cell.get("confidence"),
                 "page_image_ref": image_ref,
@@ -210,6 +227,7 @@ def _records_for_page(
             })
             if records[-1]["bbox"] is None:
                 raise OCRBundleError(f"Missing bbox at p{number}/{element_id}/{cell_id}")
+            base["cell_count"] += 1
     return records
 
 
@@ -223,6 +241,7 @@ def import_ocr_bundle(
     access_scope: str,
     source_root: Path | str | None = None,
     validate_crops: bool = True,
+    tolerate_out_of_page: bool = False,
 ) -> dict[str, Any]:
     """Write deterministic manifest.json and elements.jsonl for one report.
 
@@ -296,6 +315,7 @@ def import_ocr_bundle(
                     document_id=document_id, document_version=document_version,
                     access_scope=access_scope, crop_root=crop_root, source_root=root, issues=issues,
                     validate_crops=validate_crops,
+                    tolerate_out_of_page=tolerate_out_of_page,
                 )
                 for record in page_records:
                     records_file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")

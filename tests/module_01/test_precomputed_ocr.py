@@ -12,6 +12,7 @@ from financial_multiagent.ingestion.precomputed_ocr import (
     import_ocr_bundle,
     resolve_source_ref,
 )
+from financial_multiagent.ingestion.ocr_quality import assess_ocr_bundle
 
 
 def _png(path: Path, width: int = 20, height: int = 20) -> None:
@@ -125,6 +126,27 @@ def test_remote_crop_ref_is_preserved_without_downloading_crop(tmp_path: Path) -
     records = [json.loads(line) for line in (output / "elements.jsonl").read_text(encoding="utf-8").splitlines()]
     signature = next(item for item in records if item.get("element_id") == "signature_001")
     assert signature["asset_refs"]["crop"].endswith("ocr_crops/page_1/signatures/signature_001.png")
+
+
+def test_out_of_page_ocr_items_are_excluded_with_review_issues(tmp_path: Path) -> None:
+    root, json_dir, image_dir, source_json = _sample(tmp_path)
+    page = json.loads(source_json.read_text(encoding="utf-8"))
+    page["elements"][0]["bbox"] = [1, 21, 8, 24]
+    page["elements"][1]["cells"][0]["bbox"] = [2, 6, 30, 9]
+    source_json.write_text(json.dumps(page, ensure_ascii=False), encoding="utf-8")
+    output = tmp_path / "artifacts"
+    manifest = import_ocr_bundle(
+        json_dir, image_dir, output, document_id="AAA-2025-report",
+        document_version="drive-v1", access_scope="tenant-a", source_root=root,
+        tolerate_out_of_page=True,
+    )
+    assert [issue["code"] for issue in manifest["issues"]] == ["BBOX_OUTSIDE_PAGE", "BBOX_OUTSIDE_PAGE"]
+    records = [json.loads(line) for line in (output / "elements.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert not any(record.get("element_id") == "text_0001" for record in records)
+    assert next(record for record in records if record["kind"] == "table")["cell_count"] == 0
+    quality = assess_ocr_bundle(output, access_scope="tenant-a")
+    assert quality["execution_status"] == "completed"
+    assert quality["review_issue_count"] >= 2
 
 
 @pytest.mark.parametrize("change", ["missing_image", "missing_json", "invalid_json", "wrong_bbox", "missing_bbox", "duplicate_id", "page_mismatch"])

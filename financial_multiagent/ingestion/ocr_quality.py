@@ -297,16 +297,21 @@ class OCRQualityValidator:
             refs = {f"p{r['page']}/{r['element_id']}": r for r in records if "element_id" in r}
             dedup = set()
             for issue in manifest.get("issues", []):
-                if not isinstance(issue, dict) or issue.get("code") not in {"MISSING_CROP", "UNMAPPABLE_CROP"}:
+                if not isinstance(issue, dict) or issue.get("code") not in {"MISSING_CROP", "UNMAPPABLE_CROP", "BBOX_OUTSIDE_PAGE"}:
                     continue
                 key = (issue.get("code"), issue.get("location"), issue.get("field"))
                 if key in dedup:
                     continue
                 dedup.add(key)
                 evaluated["assets"] += 1
-                add("assets", issue["code"], "Optional crop issue inherited from adapter",
-                    refs.get(issue.get("location")), severity="info", review=False,
-                    evidence={"field": issue.get("field")})
+                if issue["code"] == "BBOX_OUTSIDE_PAGE":
+                    add("assets", issue["code"], "OCR element bbox is outside the page; element was excluded",
+                        severity="warning", review=True, locator=issue.get("location"),
+                        evidence={"raw_bbox": issue.get("raw_bbox"), "source_ref": issue.get("source_ref")})
+                else:
+                    add("assets", issue["code"], "Optional crop issue inherited from adapter",
+                        refs.get(issue.get("location")), severity="info", review=False,
+                        evidence={"field": issue.get("field")})
         for check in CHECKS[1:]:
             if check not in profile.enabled_checks:
                 continue
