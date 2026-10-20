@@ -12,6 +12,8 @@ Code Python và notebook Colab cho kiến trúc đầy đủ C1–C5. Thiết k�
 
 ## Chạy trên Colab
 
+Pilot Module 1 cho BTS, BTW, BPC dùng [notebook Drive–Git–Colab](colab/00_module1_drive_pilot.ipynb) và [hợp đồng chạy/resume](docs/10-module-1-colab-pilot.md). Hai thư mục nguồn Drive chỉ đọc; kết quả nằm trong `multi_agent_financial`.
+
 Mở các notebook theo thứ tự trong [colab/](colab/README.md): quality → normalization → [C1](colab/03_c1_validation.ipynb). Dùng kernel Colab; code được clone/pull từ GitHub, dữ liệu và kết quả giữ trên Drive. C1 phải chọn một normalization run cụ thể; không tự giả định thông tin thiếu hoặc tự tạo quy định.
 
 ## Chạy local

@@ -1,5 +1,11 @@
 # Chạy Module 1 trên Colab
 
+## Pilot theo ba mã BTS, BTW, BPC
+
+Mở [00_module1_drive_pilot.ipynb](00_module1_drive_pilot.ipynb) trên Colab để chạy theo ID thư mục Drive, không phụ thuộc vào đường dẫn MyDrive. Notebook xác thực Drive API, clone/pull code từ Git, xử lý từng báo cáo trong runtime Colab và lưu kết quả vào `multi_agent_financial/module_01_pilot/`. Chạy lại dùng completion marker để bỏ qua báo cáo đã hoàn tất với cùng nguồn, code và config. Mặc định chạy mọi năm của ba mã; đặt `YEARS = ('2025',)` để giới hạn khi thử. Xem [hợp đồng pilot](../docs/10-module-1-colab-pilot.md). Hai thư mục nguồn tuyệt đối chỉ đọc.
+
+Các notebook 01–03 bên dưới là luồng thủ công lịch sử dùng đường dẫn MyDrive và bundle có sẵn; không phải bộ điều khiển batch pilot mới.
+
 Mở [01_ocr_quality_report.ipynb](01_ocr_quality_report.ipynb) trong VS Code và chọn kernel Colab; hoặc mở bản trên [web Colab](https://colab.research.google.com/github/VuongQuocAn/Mutil_Agent_Financial_Report/blob/main/colab/01_ocr_quality_report.ipynb).
 
 Chạy các ô theo thứ tự: mount Drive → clone/pull repository → chọn báo cáo → quality report → xem issue. Với BTS/2025 đã import, giữ `RUN_IMPORT = False`; notebook dùng `MyDrive/Financial_MultiAgent_Results/BTS/2025/ocr-bundle-v1/`. Nếu bundle nằm ở nơi khác, sửa `bundle_dir` trong ô cấu hình.

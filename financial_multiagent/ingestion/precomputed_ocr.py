@@ -97,7 +97,7 @@ def _bbox(value: Any, width: int, height: int, location: str) -> list[int] | Non
 
 def _crop_refs(
     element: dict[str, Any], crop_root: Path, source_root: Path,
-    issues: list[dict[str, Any]], location: str,
+    issues: list[dict[str, Any]], location: str, *, validate_crops: bool = True,
 ) -> dict[str, str]:
     refs: dict[str, str] = {}
     for key, value in element.items():
@@ -114,7 +114,7 @@ def _crop_refs(
             asset.resolve().relative_to(crop_root.resolve())
         except ValueError as exc:
             raise OCRBundleError(f"Crop escapes its source directory: {asset}") from exc
-        if not asset.is_file():
+        if validate_crops and not asset.is_file():
             issues.append({"code": "MISSING_CROP", "location": location, "field": key, "expected_ref": _relative(asset, source_root)})
             continue
         refs[key] = _relative(asset, source_root)
@@ -135,6 +135,7 @@ def _records_for_page(
     data: dict[str, Any], *, number: int, width: int, height: int,
     image_ref: str, json_ref: str, document_id: str, document_version: str,
     access_scope: str, crop_root: Path, source_root: Path, issues: list[dict[str, Any]],
+    validate_crops: bool,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen_elements: set[str] = set()
@@ -164,7 +165,7 @@ def _records_for_page(
             "page_image_ref": image_ref,
             "ocr_json_ref": json_ref,
         }
-        asset_refs = _crop_refs(element, crop_root, source_root, issues, f"p{number}/{element_id}")
+        asset_refs = _crop_refs(element, crop_root, source_root, issues, f"p{number}/{element_id}", validate_crops=validate_crops)
         if asset_refs:
             base["asset_refs"] = asset_refs
         if base["bbox"] is None:
@@ -221,6 +222,7 @@ def import_ocr_bundle(
     document_version: str,
     access_scope: str,
     source_root: Path | str | None = None,
+    validate_crops: bool = True,
 ) -> dict[str, Any]:
     """Write deterministic manifest.json and elements.jsonl for one report.
 
@@ -293,6 +295,7 @@ def import_ocr_bundle(
                     image_ref=image_ref, json_ref=json_ref,
                     document_id=document_id, document_version=document_version,
                     access_scope=access_scope, crop_root=crop_root, source_root=root, issues=issues,
+                    validate_crops=validate_crops,
                 )
                 for record in page_records:
                     records_file.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
@@ -322,6 +325,8 @@ def import_ocr_bundle(
             "record_counts": dict(sorted(counts.items())),
             "issues": issues,
         }
+        if not validate_crops:
+            manifest["crop_validation"] = "deferred"
         (stage / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

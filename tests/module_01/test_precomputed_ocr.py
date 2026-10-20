@@ -112,6 +112,21 @@ def test_missing_optional_crop_is_reported_without_losing_page_source(tmp_path: 
     assert image.is_file()
 
 
+def test_remote_crop_ref_is_preserved_without_downloading_crop(tmp_path: Path) -> None:
+    root, json_dir, image_dir, _ = _sample(tmp_path, missing_crop=True)
+    output = tmp_path / "artifacts"
+    manifest = import_ocr_bundle(
+        json_dir, image_dir, output, document_id="AAA-2025-report",
+        document_version="drive-v1", access_scope="tenant-a", source_root=root,
+        validate_crops=False,
+    )
+    assert manifest["crop_validation"] == "deferred"
+    assert manifest["issues"] == []
+    records = [json.loads(line) for line in (output / "elements.jsonl").read_text(encoding="utf-8").splitlines()]
+    signature = next(item for item in records if item.get("element_id") == "signature_001")
+    assert signature["asset_refs"]["crop"].endswith("ocr_crops/page_1/signatures/signature_001.png")
+
+
 @pytest.mark.parametrize("change", ["missing_image", "missing_json", "invalid_json", "wrong_bbox", "missing_bbox", "duplicate_id", "page_mismatch"])
 def test_invalid_bundle_fails_without_publishing(tmp_path: Path, change: str) -> None:
     root, json_dir, image_dir, source_json = _sample(tmp_path)
