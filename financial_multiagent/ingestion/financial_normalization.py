@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from .ocr_quality import OCRQualityValidator, VALIDATOR_VERSION as QUALITY_VALIDATOR_VERSION
 
-NORMALIZER_VERSION = "1.0.0"
+NORMALIZER_VERSION = "1.1.0"
 ONTOLOGY_VERSION = "b02dn-draft-1"
 PLACEHOLDERS = {"", "-", "–", "—", "_", "…"}
 
@@ -185,6 +185,8 @@ def _context_from_page(records: list[dict], table: dict) -> dict:
         if "don vi" in text:
             units.append((_unit(r["text"]), r["source_ref"], r["text"]))
         match = re.search(r"cho nam tai chinh ket thuc ngay (\d{1,2}) thang (\d{1,2}) nam (\d{4})", text)
+        slash_match = re.search(r"cho nam tai chinh ket thuc ngay (\d{1,2})/(\d{1,2})/(\d{4})", text)
+        match = match or slash_match
         if match:
             try:
                 end = date(int(match[3]), int(match[2]), int(match[1]))
@@ -199,6 +201,98 @@ def _context_from_page(records: list[dict], table: dict) -> dict:
         if "dieu chinh" in text or "hoi to" in text:
             restatement_refs.append(r["source_ref"])
     return dict(units=units, end_dates=end_dates, scopes=scopes, restatement_refs=restatement_refs)
+
+
+def _year_header(text: str) -> tuple[int, bool] | None:
+    match = re.fullmatch(r"nam (\d{4})(?: (vnd|dong))?", _fold(text))
+    return (int(match[1]), bool(match[2])) if match else None
+
+
+def _column_for_block(block: dict, row: dict[int, dict]) -> int | None:
+    center = (block["bbox"][0] + block["bbox"][2]) / 2
+    matches = [col for col, cell in row.items() if cell["bbox"][0] <= center <= cell["bbox"][2]]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _table_header(records: list[dict], table: dict, rows: dict[int, dict[int, dict]],
+                  inferred: dict) -> tuple[int, dict[str, int], dict[str, dict], bool]:
+    """Return header roles with source evidence; external layouts require review."""
+    dates = {d for d, _ in inferred["end_dates"]}
+    year = next(iter(dates)).year if len(dates) == 1 else None
+    headers = []
+    for row, entries in rows.items():
+        roles: dict[str, int] = {}
+        evidence: dict[str, dict] = {}
+        for col, cell in entries.items():
+            label = _fold(cell["text"])
+            role = {"chi tieu": "label", "ma so": "code", "nam nay": "current",
+                    "nam truoc": "previous"}.get(label)
+            explicit_year = _year_header(cell["text"])
+            if explicit_year and year is not None:
+                if explicit_year[0] == year:
+                    role = "current"
+                elif explicit_year[0] == year - 1:
+                    role = "previous"
+            if role:
+                if role in roles:
+                    raise NormalizationError("Ambiguous duplicated header role")
+                roles[role], evidence[role] = col, cell
+        if {"label", "code", "current", "previous"} <= roles.keys():
+            headers.append((row, roles, evidence))
+    if len(headers) == 1:
+        row, roles, evidence = headers[0]
+        return row, roles, evidence, False
+    if headers:
+        raise NormalizationError("Multiple complete table headers")
+
+    # Some OCR exports leave a B02 table header as text blocks above the table.
+    # The value/label columns require exact header text and geometric alignment.
+    if not rows or year is None:
+        raise NormalizationError("Expected one explicit CHI TIEU/MA SO/NAM NAY/NAM TRUOC header")
+    first_row = rows[min(rows)]
+    blocks = [r for r in records if r["page"] == table["page"] and r["kind"] == "ocr_block"
+              and 0 <= table["bbox"][1] - r["bbox"][3] <= 200]
+    roles, evidence = {}, {}
+    for block in blocks:
+        label = _fold(block["text"])
+        explicit_year = _year_header(block["text"])
+        role = "label" if label == "chi tieu" else None
+        if explicit_year:
+            if explicit_year[0] == year:
+                role = "current"
+            elif explicit_year[0] == year - 1:
+                role = "previous"
+        if role:
+            col = _column_for_block(block, first_row)
+            if col is None or role in roles or col in roles.values():
+                raise NormalizationError("Ambiguous external table header geometry")
+            roles[role], evidence[role] = col, block
+    if set(roles) != {"label", "current", "previous"}:
+        raise NormalizationError("Incomplete external table header")
+    # The combined 'Mã Thuyết / số minh' block spans two columns. Require
+    # corroboration between statement codes and row labels before choosing one.
+    code_header = [b for b in blocks if "ma thuyet" in _fold(b["text"])]
+    if len(code_header) != 1 or not any("so minh" in _fold(b["text"]) for b in blocks):
+        raise NormalizationError("No explicit code/note header evidence")
+    candidates = []
+    for col in first_row:
+        if col in roles.values():
+            continue
+        matches = 0
+        for entries in rows.values():
+            label_cell, code_cell = entries.get(roles["label"]), entries.get(col)
+            if not label_cell or not code_cell:
+                continue
+            metric = METRICS.get(code_cell["text"].strip())
+            if metric and all(token in _fold(label_cell["text"]) for token in metric[1]):
+                matches += 1
+        if matches >= 3:
+            candidates.append(col)
+    if len(candidates) != 1:
+        raise NormalizationError("Cannot uniquely corroborate external code column")
+    roles["code"] = candidates[0]
+    evidence["code"] = code_header[0]
+    return -1, roles, evidence, True
 
 
 class FinancialNormalizer:
@@ -223,24 +317,10 @@ class FinancialNormalizer:
             if cell["col"] in rows[cell["row"]]:
                 raise NormalizationError("Duplicate row/col requires layout review before normalization")
             rows[cell["row"]][cell["col"]] = cell
-        headers = []
-        for row, entries in rows.items():
-            roles = {}
-            for col, c in entries.items():
-                label = _fold(c["text"])
-                role = {"chi tieu": "label", "ma so": "code", "nam nay": "current", "nam truoc": "previous"}.get(label)
-                if role:
-                    if role in roles:
-                        raise NormalizationError("Ambiguous duplicated header role")
-                    roles[role] = col
-            if {"label", "code", "current", "previous"} <= roles.keys():
-                headers.append((row, roles))
-        if len(headers) != 1:
-            raise NormalizationError("Expected one explicit CHI TIEU/MA SO/NAM NAY/NAM TRUOC header")
-        header_row, roles = headers[0]
+        inferred = _context_from_page(records, table)
+        header_row, roles, header_evidence, inferred_layout = _table_header(records, table, rows, inferred)
         if set(context.period_overrides) - {roles["current"], roles["previous"]}:
             raise NormalizationError("Period override targets a non-value column")
-        inferred = _context_from_page(records, table)
         upstream = defaultdict(list)
         for issue in quality.issues:
             if issue.source_ref and issue.review_required:
@@ -265,8 +345,12 @@ class FinancialNormalizer:
                 reasons: list[str] = []
                 refs = dict(label=[label_cell["source_ref"]] if label_cell else [],
                             statement_code=[code_cell["source_ref"]] if code_cell else [],
-                            column_header=[rows[header_row][column]["source_ref"]],
+                            column_header=[header_evidence[role]["source_ref"]],
                             unit=[], period=[], scope=[])
+                if inferred_layout:
+                    refs["layout"] = [header_evidence[k]["source_ref"]
+                                      for k in ("label", "code", "current", "previous")]
+                    reasons.append("EXTERNAL_HEADER_LAYOUT_REQUIRES_REVIEW")
                 if not mapped:
                     reasons.append("UNMAPPED_OR_CONFLICTING_METRIC")
                 try:
@@ -280,6 +364,14 @@ class FinancialNormalizer:
                 units = {x[0] for x in inferred["units"]}
                 raw_unit = next(iter(units)) if len(units) == 1 and None not in units else None
                 refs["unit"] = [x[1] for x in inferred["units"]]
+                header_unit = _year_header(header_evidence[role]["text"])
+                if header_unit and header_unit[1]:
+                    if raw_unit is not None and raw_unit != "VND":
+                        reasons.append("UNIT_CONFLICT")
+                        raw_unit = None
+                    elif not inferred["units"]:
+                        raw_unit = "VND"
+                        refs["unit"] = [header_evidence[role]["source_ref"]]
                 if context.unit_override is not None:
                     if raw_unit is not None and raw_unit != context.unit_override:
                         reasons.append("UNIT_CONFLICT")
@@ -331,7 +423,7 @@ class FinancialNormalizer:
                     reasons.append("UNKNOWN_SCOPE")
                 if context.company_id is None:
                     reasons.append("UNKNOWN_COMPANY")
-                header_text = rows[header_row][column]["text"]
+                header_text = header_evidence[role]["text"]
                 restated = bool(inferred["restatement_refs"]) or "dieu chinh" in _fold(header_text)
                 if restated:
                     reasons.append("RESTATEMENT_REQUIRES_REVIEW")

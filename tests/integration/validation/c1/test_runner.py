@@ -4,6 +4,7 @@ import pytest
 
 from financial_multiagent.validation.c1 import C1Input, run_c1
 from financial_multiagent.validation.c1.contracts import C1InputError
+from financial_multiagent.ingestion.financial_normalization import NORMALIZER_VERSION
 
 
 def test_complete_run_replays_sources_and_saves_registry_snapshot(normalized_input):
@@ -75,9 +76,11 @@ def test_failed_write_leaves_no_completed_c1_run(normalized_input, monkeypatch):
 def test_bts_current_snapshot_is_unknown_without_context_and_rules(tmp_path):
     original = Path(__file__).resolve().parents[4] / "artifacts/module_01/BTS-2025"
     runs = sorted((original / "normalization").glob("*/normalization_report.json"))
-    if not runs:
-        pytest.skip("Local BTS normalization not available")
-    result = run_c1([C1Input(original, runs[-1].parent)], access_scope="demo-scope", output_dir=tmp_path / "c1")
+    current_runs = [path for path in runs if json.loads(path.read_text(encoding="utf-8"))
+                    .get("normalizer_version") == NORMALIZER_VERSION]
+    if not current_runs:
+        pytest.skip("Local BTS normalization for current version not available")
+    result = run_c1([C1Input(original, current_runs[-1].parent)], access_scope="demo-scope", output_dir=tmp_path / "c1")
     assert result["execution_status"] == "completed" and result["legal_status"] == "unknown"
     assert result["outcome_counts"].get("violation", 0) == 0
     assert result["outcome_counts"].get("pass", 0) == 0
