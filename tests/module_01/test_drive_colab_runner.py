@@ -1,9 +1,10 @@
 """Pilot selection and resume gates without connecting to Drive."""
 
+import json
 import pytest
 
 from financial_multiagent.ingestion.drive_colab_runner import (
-    DriveStore, PilotConfig, _source_identity,
+    DriveStore, PilotConfig, _source_identity, _tables,
 )
 
 
@@ -31,6 +32,18 @@ def test_pilot_does_not_expand_to_other_tickers():
     assert PilotConfig().tickers == ("BTS", "BTW", "BPC")
     with pytest.raises(ValueError):
         PilotConfig(tickers=("CAG",))
+
+
+def test_only_primary_income_statement_is_selected(tmp_path):
+    records = [
+        {"kind": "table", "name": "BÁO CÁO KẾT QUẢ HOẠT ĐỘNG KINH DOANH",
+         "page": 12, "element_id": "table_001"},
+        {"kind": "table", "name": "Thay đổi trên Báo cáo kết quả hoạt động kinh doanh cho năm 2021",
+         "page": 38, "element_id": "table_002"},
+    ]
+    (tmp_path / "elements.jsonl").write_text(
+        "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in records), encoding="utf-8")
+    assert _tables(tmp_path) == [(12, "table_001")]
 
 
 class _FakeGet:

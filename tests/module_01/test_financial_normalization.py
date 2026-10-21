@@ -183,9 +183,12 @@ def test_missing_period_title_cannot_use_manifest_year(tmp_path):
     assert fact["period_end"] is None and fact["fiscal_period"] is None
 
 
-def test_explicit_year_and_vnd_table_headers(tmp_path):
+@pytest.mark.parametrize("title", ["Cho năm tài chính kết thúc ngày 31/12/2025",
+                                   "năm kết thúc ngày 31/12/2025",
+                                   "năm tài chính kết thúc ngày 31/12/2025"])
+def test_explicit_year_and_vnd_table_headers(tmp_path, title):
     _, manifest, records = sample(tmp_path)
-    records[0]["text"] = "Cho năm tài chính kết thúc ngày 31/12/2025"
+    records[0]["text"] = title
     records[1]["text"] = "Báo cáo tài chính"
     for cell in records:
         if cell["kind"] == "table_cell" and cell["row"] == 0:
@@ -243,6 +246,166 @@ def test_external_header_layout_keeps_review_and_provenance(tmp_path):
     assert "AAA/v1/p12/code_header" in first["context_refs"]["layout"]
     assert all("EXTERNAL_HEADER_LAYOUT_REQUIRES_REVIEW" in f["normalization_issues"]
                for f in result["facts"])
+
+
+def test_numbered_rows_align_header_by_geometry_and_keep_restatement(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    records[:] = records[:3]
+    records[2]["bbox"] = [200, 760, 2300, 1900]
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    header = ["CHỈ TIÊU", "Mã số", "Thuyết\nminh", "Năm nay", "Năm trước\n(Trình bày lại)"]
+    header_bounds = [(428, 606), (1175, 1262), (1311, 1428), (1678, 1848), (2044, 2281)]
+    data = ["1.", "Doanh thu bán hàng và cung cấp dịch vụ", "01", "25",
+            "3.231.367.429.906", "2.979.817.834.159"]
+    data_bounds = [(341, 371), (428, 1126), (1190, 1244), (1338, 1383),
+                   (1519, 1848), (1952, 2279)]
+    for row, values, bounds in ((0, header, header_bounds), (1, data, data_bounds)):
+        for col, value in enumerate(values):
+            cell_id = f"shifted_{row}_{col}"
+            records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                                row=row, col=col, text=value,
+                                bbox=[bounds[col][0], 778 + row * 60, bounds[col][1], 820 + row * 60],
+                                source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] = 11
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    for page in manifest["pages"]:
+        page.update(width=2500, height=3505)
+    result = norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")
+    current, previous = result["facts"]
+    assert current["metric_code"] == "revenue_gross" and current["col"] == 4
+    assert previous["col"] == 5 and previous["restatement_status"] == "needs_review"
+    assert "RESTATEMENT_REQUIRES_REVIEW" in previous["normalization_issues"]
+
+
+def test_split_external_headers_and_standalone_vnd(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    records[:] = records[:3]
+    records[0]["text"] = "năm tài chính kết thúc ngày 31/12/2023"
+    records[1]["text"] = "Báo cáo tài chính"
+    records[2]["bbox"] = [346, 740, 2300, 2000]
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    blocks = [
+        ("ma", "Mã", [391, 638, 443, 676]), ("so", "số", [396, 676, 438, 712]),
+        ("label", "CHỈ TIÊU", [836, 638, 1002, 673]),
+        ("current", "Năm 2023", [1621, 641, 1789, 673]),
+        ("current_unit", "VND", [1732, 683, 1791, 715]),
+        ("previous", "Năm 2022", [2088, 641, 2259, 673]),
+        ("previous_unit", "VND", [2200, 683, 2259, 715]),
+    ]
+    for element_id, text, bbox in blocks:
+        records.append(dict(common, kind="ocr_block", element_id=element_id,
+                            source_ref=f"AAA/v1/p12/{element_id}", text=text, bbox=bbox))
+    grid = [
+        ["01", "1.", "Doanh thu bán hàng và cung cấp dịch vụ", "19", "529.806.369.062", "468.755.201.520"],
+        ["10", "2.", "Doanh thu thuần về bán hàng và cung cấp dịch vụ", "19", "529.806.369.062", "468.747.514.020"],
+        ["11", "3.", "Giá vốn hàng bán", "19", "300.000.000.000", "290.000.000.000"],
+    ]
+    bounds = [(381, 428), (470, 497), (539, 1153), (1371, 1413), (1524, 1789), (1987, 2259)]
+    for row, values in enumerate(grid):
+        for col, value in enumerate(values):
+            cell_id = f"split_{row}_{col}"
+            records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                                row=row, col=col, text=value,
+                                bbox=[bounds[col][0], 810 + row * 150, bounds[col][1], 842 + row * 150],
+                                source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] = 18
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    for page in manifest["pages"]:
+        page.update(width=2500, height=3505)
+    facts = norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")["facts"]
+    assert len(facts) == 6
+    assert facts[0]["period_end"] == "2023-12-31" and facts[0]["raw_unit"] == "VND"
+    assert facts[0]["context_refs"]["unit"] == ["AAA/v1/p12/current_unit"]
+    assert "AAA/v1/p12/so" in facts[0]["context_refs"]["layout"]
+    assert facts[1]["context_refs"]["unit"] == ["AAA/v1/p12/previous_unit"]
+    assert all("EXTERNAL_HEADER_LAYOUT_REQUIRES_REVIEW" in f["normalization_issues"] for f in facts)
+
+
+def test_multiline_table_header_preserves_restatement_and_fragment_refs(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    records[:] = records[:3]
+    records[0]["text"] = "Cho năm tài chính kết thúc ngày 31/12/2024"
+    records[1]["text"] = "Báo cáo tài chính"
+    records[2]["bbox"] = [353, 663, 2300, 1900]
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    rows = [
+        (0, ["Chỉ tiêu", "Mã", "Thuyết", "Năm 2024", "Năm 2023"],
+         [(358, 506), (1257, 1319), (1373, 1480), (1662, 1796), (2068, 2201)]),
+        (1, [None, "số", "minh", "VND", "(Trình bày lại)"],
+         [None, (1265, 1312), (1376, 1460), (1732, 1801), (1976, 2270)]),
+        (2, [None, None, None, None, "VND"],
+         [None, None, None, None, (2194, 2265)]),
+        (3, ["Doanh thu bán hàng và cung cấp dịch vụ", "01", "24",
+             "561.464.712.365", "529.806.369.062"],
+         [(358, 1181), (1265, 1312), (1388, 1440), (1554, 1868), (1954, 2265)]),
+    ]
+    for row, values, bounds in rows:
+        for col, value in enumerate(values):
+            if value is None:
+                continue
+            cell_id = f"multiline_{row}_{col}"
+            y = {0: 667, 1: 741, 2: 808, 3: 882}[row]
+            records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                                row=row, col=col, text=value,
+                                bbox=[bounds[col][0], y, bounds[col][1], y + 35],
+                                source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] = len(records) - 3
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    for page in manifest["pages"]:
+        page.update(width=2500, height=3505)
+    current, previous = norm.FinancialNormalizer().normalize(
+        manifest, records, page=12, table_id="table_001")["facts"]
+    assert current["metric_code"] == "revenue_gross" and current["raw_unit"] == "VND"
+    assert current["context_refs"]["unit"] == ["AAA/v1/p12/table_001/multiline_1_3"]
+    assert len(previous["context_refs"]["column_header"]) == 3
+    assert previous["restatement_status"] == "needs_review"
+    assert "SPLIT_HEADER_LAYOUT_REQUIRES_REVIEW" in previous["normalization_issues"]
+
+
+def test_combined_code_note_header_uses_corroborated_code_column(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    records[:] = records[:3]
+    records[0]["text"] = "Cho năm tài chính kết thúc ngày 31/12/2021"
+    records[1]["text"] = "Đơn vị tính: VND"
+    records[1]["bbox"] = [1997, 424, 2297, 463]
+    records[2]["bbox"] = [330, 459, 2300, 1900]
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    rows = [
+        (0, ["CHỈ TIÊU", "Mã Thuyết", "Năm 2021", "Năm 2020"],
+         [(421, 573), (1315, 1517), (1711, 1891), (2096, 2275)]),
+        (1, [None, "số minh"], [None, (1322, 1497)]),
+        (2, ["Doanh thu bán hàng và cung cấp dịch vụ", "01", "18",
+             "264.024.739.528", "249.367.794.420"],
+         [(337, 1278), (1322, 1371), (1455, 1502), (1591, 1913), (1975, 2297)]),
+        (3, ["Doanh thu thuần về bán hàng và cung cấp dịch vụ", "10", "18",
+             "264.024.739.528", "249.367.794.420"],
+         [(337, 1278), (1322, 1371), (1455, 1502), (1591, 1913), (1975, 2297)]),
+        (4, ["Giá vốn hàng bán", "11", "19", "200.000.000.000", "190.000.000.000"],
+         [(337, 1278), (1322, 1371), (1455, 1502), (1591, 1913), (1975, 2297)]),
+    ]
+    for row, values, bounds in rows:
+        for col, value in enumerate(values):
+            if value is None:
+                continue
+            cell_id = f"combined_{row}_{col}"
+            y = {0: 480, 1: 536, 2: 645, 3: 745, 4: 845}[row]
+            records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                                row=row, col=col, text=value,
+                                bbox=[bounds[col][0], y, bounds[col][1], y + 35],
+                                source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] = len(records) - 3
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    for page in manifest["pages"]:
+        page.update(width=2500, height=3505)
+    facts = norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")["facts"]
+    assert len(facts) == 6 and facts[0]["statement_code"] == "01"
+    assert facts[0]["raw_unit"] == "VND" and facts[0]["col"] == 3
+    assert facts[0]["context_refs"]["statement_code"] == ["AAA/v1/p12/table_001/combined_2_1"]
+    assert all("SPLIT_HEADER_LAYOUT_REQUIRES_REVIEW" in f["normalization_issues"] for f in facts)
 
 
 def test_large_values_scale_without_decimal_rounding(tmp_path):

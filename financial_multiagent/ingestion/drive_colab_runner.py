@@ -242,7 +242,7 @@ def _tables(bundle_dir: Path) -> list[tuple[int, str]]:
         for line in stream:
             record = json.loads(line)
             if (record["kind"] == "table" and isinstance(record.get("name"), str)
-                    and "ket qua hoat dong kinh doanh" in _fold(record["name"])):
+                    and _fold(record["name"]) == "bao cao ket qua hoat dong kinh doanh"):
                 candidates.append((record["page"], record["element_id"]))
     return candidates
 
