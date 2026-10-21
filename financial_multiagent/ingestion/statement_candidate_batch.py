@@ -13,7 +13,21 @@ from .drive_colab_runner import (
 from .financial_normalization import NormalizationContext, NormalizationError
 from .statement_candidates import normalize_statement_table, statement_kind
 
-BATCH_VERSION = "1"
+BATCH_VERSION = "2"
+
+
+def summarize_table_coverage(tables: list[dict]) -> dict:
+    """Describe extraction coverage without treating OCR gaps as job failures."""
+    extracted = sum(item.get("table_status") == "extracted" for item in tables)
+    quarantined = sum(item.get("table_status") == "quarantined" for item in tables)
+    return {
+        "table_count": len(tables),
+        "extracted_table_count": extracted,
+        "quarantined_table_count": quarantined,
+        "candidate_fact_count": sum(item.get("fact_count", 0) for item in tables),
+        "coverage_status": ("none" if not tables or extracted == 0 else
+                            "partial" if quarantined else "all_detected_tables"),
+    }
 
 
 def run_statement_candidate_batch(service: Any) -> list[dict]:
@@ -74,18 +88,22 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
                                 company_evidence="Drive folder ticker matches OCR symbol; legal entity not verified"),
                             output_dir=results_dir / "normalization",
                         )
-                        item.update(run_id=normalized["run_id"], fact_count=normalized["fact_count"],
+                        item.update(table_status="extracted", run_id=normalized["run_id"],
+                                    fact_count=normalized["fact_count"],
                                     mapped_metric_count=normalized["mapped_metric_count"],
                                     quality_status=normalized["quality_status"])
                     except NormalizationError as exc:
-                        item.update(quality_status="needs_review", reason=str(exc), fact_count=0)
+                        item.update(table_status="quarantined", quality_status="needs_review",
+                                    reason=str(exc), fact_count=0, mapped_metric_count=0)
                     table_results.append(item)
+                coverage = summarize_table_coverage(table_results)
                 summary = {"schema_version": "1", "batch_version": BATCH_VERSION,
                            "ticker": ticker, "year": year, "source_fingerprint": source,
                            "code_revision": revision, "config_fingerprint": config,
-                           "table_count": len(tables), "fact_count": sum(x["fact_count"] for x in table_results),
+                           **coverage, "fact_count": coverage["candidate_fact_count"],
                            "tables": table_results, "quality_status": "needs_review",
                            "limitations": ["Numeric B01/B03 candidates require source and metadata review.",
+                                           "Quarantined tables may require a separate OCR/layout review.",
                                            "No legal C1 conclusion or Knowledge Storage publish."]}
                 _write_json(results_dir / "statement_candidate_summary.json", summary)
                 artifacts = store.upload_tree(run_folder, results_dir)
@@ -95,8 +113,12 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
                 completion_path = base / "completion.json"
                 _write_json(completion_path, completion)
                 store.upload_result(run_folder, completion_path)
-            result = {"ticker": ticker, "year": year, "status": "processed",
+            result = {"ticker": ticker, "year": year,
+                      "status": "processed_with_gaps" if coverage["coverage_status"] != "all_detected_tables"
+                                else "processed",
                       "drive_folder_id": run_folder, "table_count": len(tables),
+                      "extracted_table_count": coverage["extracted_table_count"],
+                      "quarantined_table_count": coverage["quarantined_table_count"],
                       "fact_count": summary["fact_count"]}
             output.append(result)
             print(json.dumps(result), flush=True)

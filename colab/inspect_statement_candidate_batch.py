@@ -23,16 +23,18 @@ def main() -> None:
         raise RuntimeError("Statement candidate batch status is absent")
     for report in status["reports"]:
         output = {key: report.get(key) for key in ("ticker", "year", "status", "error")}
-        if report["status"] in ("processed", "skipped_completed"):
+        if report["status"] in ("processed", "processed_with_gaps", "skipped_completed"):
             marker = store.read_result_json(report["drive_folder_id"], "completion.json")
             if marker is None:
                 output["error"] = "Missing completion marker"
             else:
                 summary = marker["summary"]
                 output["fact_count"] = summary["fact_count"]
+                output["coverage_status"] = summary.get("coverage_status")
                 output["tables"] = [
                     {key: item.get(key) for key in
-                     ("page", "statement_kind", "fact_count", "mapped_metric_count", "reason")}
+                     ("page", "statement_kind", "table_status", "fact_count",
+                      "mapped_metric_count", "reason")}
                     for item in summary["tables"]
                 ]
         print(json.dumps(output, ensure_ascii=False), flush=True)

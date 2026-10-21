@@ -2,6 +2,7 @@ from collections import Counter
 
 from financial_multiagent.ingestion.financial_normalization import NormalizationContext
 from financial_multiagent.ingestion.statement_candidates import extract_statement_candidates
+from financial_multiagent.ingestion.statement_candidate_batch import summarize_table_coverage
 
 
 def fixture(kind, *, external_header):
@@ -87,3 +88,13 @@ def test_b03_missing_comparison_is_issue_not_zero():
     assert ("60", "previous") not in facts
     assert any(issue["code"] == "MISSING_OR_AMBIGUOUS_VALUE_CELL" and issue["row"] == 2
                and issue["column_role"] == "previous" for issue in result["issues"])
+
+
+def test_unreadable_table_is_quarantined_without_discarding_other_candidates():
+    coverage = summarize_table_coverage([
+        {"table_status": "extracted", "fact_count": 38},
+        {"table_status": "quarantined", "fact_count": 0},
+    ])
+    assert coverage["coverage_status"] == "partial"
+    assert coverage["candidate_fact_count"] == 38
+    assert coverage["quarantined_table_count"] == 1
