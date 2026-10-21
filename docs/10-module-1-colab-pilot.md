@@ -1,6 +1,6 @@
 # Module 1 — chạy pilot Drive · Git · Colab
 
-**Trạng thái:** đã chạy pilot trên Colab cho BTS, BTW, BPC, mỗi mã từ 2021 đến 2025, với commit `4dd48a5`. Cả 15 báo cáo có checkpoint trên [Drive 3](https://drive.google.com/drive/folders/15NHeju4YoIftMayvZYl1DAJVE5iKER5H). Đây là cách triển khai nhánh dữ liệu OCR có sẵn, không thay phạm vi kiến trúc Module 1/C1–C5. Xem [Level 0](00-overview.md), [Module 1](01-document-ingestion.md), [C1](01c-c1-validation.md) và [bàn giao Drive](09-drive-colab-handoff.md).
+**Trạng thái:** đã chạy pilot trên Colab cho BTS, BTW, BPC, mỗi mã từ 2021 đến 2025, với commit `4dd48a5`; ba layout B02 cần rà soát được xử lý thêm bằng commit code `c4b888c`. Cả 15 báo cáo có checkpoint trên [Drive 3](https://drive.google.com/drive/folders/15NHeju4YoIftMayvZYl1DAJVE5iKER5H). Đây là cách triển khai nhánh dữ liệu OCR có sẵn, không thay phạm vi kiến trúc Module 1/C1–C5. Xem [Level 0](00-overview.md), [Module 1](01-document-ingestion.md), [C1](01c-c1-validation.md) và [bàn giao Drive](09-drive-colab-handoff.md).
 
 ## Level 0 — luồng và mục đích
 
@@ -22,7 +22,7 @@ flowchart LR
 
 **Resume:** tên run gắn fingerprint metadata của toàn bộ JSON/PNG nguồn, commit Git và config. Khi chạy lại, runner kiểm completion marker và MD5 của từng artifact trên Drive. Chỉ khi chúng khớp mới bỏ qua báo cáo. Nguồn/code/config đổi sẽ tạo run mới; báo cáo lỗi hoặc upload dở được xử lý lại, còn artifact đã upload đúng MD5 được bỏ qua khi upload lại. Kết quả cũ không bị ghi đè bởi run khác phiên bản.
 
-Run đã kiểm chứng dưới đây dùng checkout `4dd48a5`. Khi tiếp tục chính batch này, cần giữ checkout đó: `git pull` lên commit mới, kể cả commit chỉ sửa tài liệu, sẽ đổi Git SHA mà runner dùng để nhận diện run và tạo một lượt xử lý mới. Đây là giới hạn hiện tại của khóa resume; trước khi mở rộng ra các mã khác cần chốt cách nhận diện phiên bản code để không tải lại pilot vì thay đổi tài liệu. Lượt retry BTS/2025 dùng `httplib2.Http(timeout=180)` cho Drive API sau khi request mặc định bị timeout.
+Batch đầu đã kiểm chứng dưới đây dùng checkout `4dd48a5`; khóa resume đời này gắn Git `HEAD`. Runner v2 ở `c4b888c` lấy commit cuối thay đổi `financial_multiagent/`, nên commit chỉ sửa tài liệu không tạo run dữ liệu mới. Thay đổi code tạo run mới theo đúng version; run cũ vẫn được giữ. Lượt retry BTS/2025 dùng `httplib2.Http(timeout=180)` cho Drive API sau khi request mặc định bị timeout. Lượt chạy chọn riêng mã/năm ghi `batch_status_selection_*.json` để không ghi đè `batch_status.json` của batch đầy đủ.
 
 **Phụ thuộc:** Google Colab, OAuth Drive API, `google-api-python-client`, quyền đọc hai folder nguồn và quyền ghi `multi_agent_financial`, GitHub repo sẵn sàng clone/pull. PDF gốc, rule registry production và publish sang C2 chưa được cung cấp qua luồng này.
 
@@ -35,7 +35,7 @@ Run đã kiểm chứng dưới đây dùng checkout `4dd48a5`. Khi tiếp tục
 | Source snapshot | Tập `page_N.json` và `page_N.png` liên tục, cùng số trang; Drive ID/size/MD5/thời gian sửa tạo fingerprint. Adapter kiểm SHA-256 bytes, metadata kích thước, bbox và provenance. Bbox OCR vượt trang được ghi nguyên tọa độ vào issue và phần tử đó bị loại khỏi records, không sửa âm thầm. |
 | Crop/signature | Không tải toàn bộ crop. Đường dẫn logic được giữ với `crop_validation=deferred`; sự tồn tại/chất lượng crop chưa được chứng minh. |
 | OCR quality | Kiểm tra xác định trên toàn bộ adapter bundle; ảnh trang chỉ dùng để kiểm hash/kích thước. Độ chính xác ký tự thị giác chưa được đo. |
-| FinancialFact | Normalizer hiện nhận đúng bảng B02 chính có tên `Báo cáo kết quả hoạt động kinh doanh`; loại các bảng thuyết minh có tên chỉ chứa cụm này. Header `Năm nay/Năm trước`, header năm tường minh, header tách nhiều hàng và header OCR nằm ngoài bảng được nhận khi tọa độ cột và mã chỉ tiêu đối chiếu được. Header tách hàng/ngoài bảng mang issue `SPLIT_HEADER_LAYOUT_REQUIRES_REVIEW`/`EXTERNAL_HEADER_LAYOUT_REQUIRES_REVIEW`; cột so sánh trình bày lại mang `RESTATEMENT_REQUIRES_REVIEW`. Metadata kỳ, phạm vi, accounting basis thiếu vẫn ở `needs_review`; bbox hỏng/cell trùng vị trí không được suy đoán. Bảng khác chưa được chuẩn hóa. |
+| FinancialFact | Normalizer hiện nhận đúng bảng B02 chính có tên `Báo cáo kết quả hoạt động kinh doanh`; loại các bảng thuyết minh có tên chỉ chứa cụm này. Header `Năm nay/Năm trước`, header năm tường minh, header tách nhiều hàng và header OCR nằm ngoài bảng được nhận khi cột và mã chỉ tiêu đối chiếu được. Bbox của mọi ô bằng bbox cả bảng chỉ tạo candidate khi mã/nhãn và hai cột số đều corroborate, với `DEGENERATE_BBOX_LAYOUT_REQUIRES_REVIEW`. Số thứ tự và nhãn trùng `row/col` chỉ tách khi hai bbox không chồng nhau, với `ROW_ORDINAL_COLLISION_REQUIRES_REVIEW`. Header tách hàng/ngoài bảng và cột so sánh trình bày lại giữ issue riêng. Metadata kỳ, phạm vi, accounting basis thiếu vẫn ở `needs_review`; trường hợp mơ hồ khác vẫn bị chặn. Bảng khác chưa được chuẩn hóa. |
 | C1 | Chạy theo từng normalization run. Không có rule registry đã duyệt nên kết luận pháp lý là `unknown`; sai lệch kế toán không tự thành vi phạm. |
 | Quyền và phiên bản | `access_scope` là nhãn đối chiếu của prototype. Tầng retrieval/database về sau phải tự cưỡng chế quyền. Artifact gắn source fingerprint và commit; chưa có cổng publish vào Knowledge Storage/C2. |
 
@@ -65,4 +65,16 @@ Lượt chạy Colab ngày 21/10/2026 dùng commit `4dd48a5`. Lượt đầu x�
 
 Tổng cộng có 432 fact **ứng viên** từ 12 bảng B02; ba bảng còn lại lưu issue và không sinh fact. Tất cả normalization run đều ở `needs_review`. Các con số mô tả **số lượng artifact và trạng thái xử lý**, không phải độ chính xác OCR hay chứng nhận dữ liệu đúng. C1 chỉ tạo 216 kết quả `unknown` trên 12 bảng đã chuẩn hóa, vì chưa có registry quy định được duyệt. Riêng BTS/2023 có ô giá trị thiếu trong OCR nên được ghi `MISSING_VALUE_CELL`, không điền số suy đoán.
 
-**Việc còn lại của Module 1 theo kiến trúc đích:** xác minh/cải thiện OCR của ba bảng bị chặn và các fact cần rà soát; bổ sung PDF gốc và kiểm crop/chữ ký; mở rộng chuẩn hóa ra các bảng cân đối kế toán, lưu chuyển tiền tệ, thuyết minh và quan hệ kỳ/phạm vi; xây rule registry có phiên bản, hiệu lực, ngoại lệ và C1 đầy đủ; cưỡng chế ACL ở storage/retrieval/database; publish có kiểm soát sang Knowledge Storage/C2. Các nguồn và quyết định chưa có được giữ `TBD`; pilot này chưa chuyển document sang `ready`.
+### Bổ sung kiểm chứng ba layout B02
+
+Lượt chạy chọn riêng với commit code `c4b888c` tạo `completion.json` và normalization/C1 runs mới cho ba báo cáo trước đây chỉ có issue. [Trạng thái BTW/2022–2023](https://drive.google.com/file/d/1_nppQpfsRGOh0MWD8XlIRRGrNkgZO0Vs/view) và [BPC/2024](https://drive.google.com/file/d/1RcGIFdyz1Rfq6lIlPxQb14GbVmfZirvX/view) không thay `batch_status.json` của lượt 15 báo cáo.
+
+| Báo cáo | Fact ứng viên mới | C1 | Bằng chứng và giới hạn |
+|---|---:|---|---|
+| BTW/2022 | 36 | 18 `unknown` | Mã `01`: 2022 `468.755.201.520`, 2021 điều chỉnh `390.345.691.206`, đối chiếu PNG trang 14. Bbox từng ô không dùng được; mọi fact giữ review. |
+| BTW/2023 | 38 | 18 `unknown` | Mã `01`: 2023 `529.806.369.062`, 2022 `468.755.201.520`, đối chiếu PNG trang 13. Header nằm ngoài bảng; mọi fact giữ review. |
+| BPC/2024 | 38 | 18 `unknown` | Mã `01`: 2024 `268.905.178.795`, 2023 `227.638.128.651`, đối chiếu PNG trang 7. Số thứ tự OCR trùng cột nhãn được giữ ref và issue; mọi fact giữ review. |
+
+Gộp artifact tốt nhất của từng báo cáo từ **hai phiên bản code khác nhau** hiện có 544 fact ứng viên B02 và 270 kết quả C1 `unknown` trên 15 báo cáo. Đây không phải một batch đồng nhất phiên bản; không dùng số gộp như kết quả đánh giá độ chính xác hoặc tính tuân thủ.
+
+**Việc còn lại của Module 1 theo kiến trúc đích:** xác minh các fact và sửa lỗi OCR còn lại; bổ sung PDF gốc nếu có và kiểm crop/chữ ký; mở rộng chuẩn hóa ra các bảng cân đối kế toán, lưu chuyển tiền tệ, thuyết minh và quan hệ kỳ/phạm vi; xây rule registry có phiên bản, hiệu lực, ngoại lệ và C1 đầy đủ; cưỡng chế ACL ở storage/retrieval/database; publish có kiểm soát sang Knowledge Storage/C2. Các nguồn và quyết định chưa có được giữ `TBD`; pilot này chưa chuyển document sang `ready`.
