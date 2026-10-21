@@ -210,6 +210,9 @@ def test_external_header_layout_keeps_review_and_provenance(tmp_path):
     records[1]["text"] = "Đơn vị tính: VND"
     records[2]["bbox"] = [200, 760, 2300, 1900]
     header_blocks = [
+        # The report title also says "Năm 2025" but is farther from the table
+        # than the actual column header, as in BTW/2023.
+        ("year_title", "Năm 2025", [990, 555, 1190, 590]),
         ("label_header", "CHỈ TIÊU", [367, 658, 531, 693]),
         ("code_header", "Mã Thuyết", [1261, 637, 1492, 669]),
         ("note_header", "số minh", [1256, 679, 1460, 711]),
@@ -246,6 +249,64 @@ def test_external_header_layout_keeps_review_and_provenance(tmp_path):
     assert "AAA/v1/p12/code_header" in first["context_refs"]["layout"]
     assert all("EXTERNAL_HEADER_LAYOUT_REQUIRES_REVIEW" in f["normalization_issues"]
                for f in result["facts"])
+
+
+def test_table_wide_cell_bboxes_require_header_and_metric_corroboration(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    records[:] = records[:3]
+    records[1]["text"] = "Báo cáo tài chính"
+    table_box = records[2]["bbox"]
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    grid = [
+        ["Mã", "CHỈ TIÊU", "Thuyết", "Năm 2025", "Năm 2024"],
+        ["số", None, "minh", "VND", "(Đã điều chỉnh)"],
+        [None, None, None, None, "VND"],
+        ["01", "Doanh thu bán hàng và cung cấp dịch vụ", "21", "468.755.201.520", "390.345.691.206"],
+        ["10", "Doanh thu thuần về bán hàng và cung cấp dịch vụ", "21", "468.747.514.020", "389.679.505.086"],
+        ["11", "Giá vốn hàng bán", "22", "304.430.065.852", "261.748.271.490"],
+    ]
+    for row, values in enumerate(grid):
+        for col, value in enumerate(values):
+            if value is None:
+                continue
+            cell_id = f"flat_{row}_{col}"
+            records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                                row=row, col=col, text=value, bbox=table_box,
+                                source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] = len(records) - 3
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    result = norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")
+    assert len(result["facts"]) == 6
+    current, previous = result["facts"][:2]
+    assert current["value"] == "468755201520" and current["col"] == 3
+    assert previous["value"] == "390345691206" and previous["col"] == 4
+    assert previous["restatement_status"] == "needs_review"
+    assert all("DEGENERATE_BBOX_LAYOUT_REQUIRES_REVIEW" in f["normalization_issues"]
+               for f in result["facts"])
+
+
+def test_separate_row_ordinal_collision_retains_label_and_both_refs(tmp_path):
+    _, manifest, records = sample(tmp_path)
+    common = {k: records[0][k] for k in ("document_id", "document_version", "access_scope",
+                                           "page", "page_image_ref", "ocr_json_ref", "ocr_confidence")}
+    for row in (1, 2):
+        label = next(r for r in records if r["kind"] == "table_cell" and r["row"] == row and r["col"] == 0)
+        label["bbox"][0] = 80
+        cell_id = f"ordinal_{row}"
+        records.append(dict(common, kind="table_cell", table_id="table_001", cell_id=cell_id,
+                            row=row, col=0, text=f"{row}.", bbox=[5, label["bbox"][1], 50, label["bbox"][3]],
+                            source_ref=f"AAA/v1/p12/table_001/{cell_id}"))
+    records[2]["cell_count"] += 2
+    manifest["record_counts"] = dict(Counter(r["kind"] for r in records))
+    result = norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")
+    assert result["facts"][0]["metric_code"] == "revenue_net"
+    assert result["facts"][0]["context_refs"]["row_ordinal"] == ["AAA/v1/p12/table_001/ordinal_1"]
+    assert all("ROW_ORDINAL_COLLISION_REQUIRES_REVIEW" in f["normalization_issues"]
+               for f in result["facts"])
+    records[-1]["bbox"][2] = 120  # An overlapping duplicate no longer has an unambiguous label.
+    with pytest.raises(norm.NormalizationError, match="Duplicate row/col"):
+        norm.FinancialNormalizer().normalize(manifest, records, page=12, table_id="table_001")
 
 
 def test_numbered_rows_align_header_by_geometry_and_keep_restatement(tmp_path):

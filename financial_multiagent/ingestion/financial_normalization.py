@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from .ocr_quality import OCRQualityValidator, VALIDATOR_VERSION as QUALITY_VALIDATOR_VERSION
 
-NORMALIZER_VERSION = "1.2.0"
+NORMALIZER_VERSION = "1.3.0"
 ONTOLOGY_VERSION = "b02dn-draft-1"
 PLACEHOLDERS = {"", "-", "–", "—", "_", "…"}
 
@@ -306,7 +306,8 @@ def _table_header(records: list[dict], table: dict, rows: dict[int, dict[int, di
                                  unit_refs=[p["source_ref"] for p in parts
                                             if _fold(p["text"]) in {"vnd", "dong"}])
         evidence = {}
-        for cell in composed.values():
+        role_cols = {}
+        for col, cell in composed.items():
             label = _fold(cell["text"])
             role = {"chi tieu": "label", "ma so": "code"}.get(label)
             value_year = _year_header(cell["text"])
@@ -319,6 +320,7 @@ def _table_header(records: list[dict], table: dict, rows: dict[int, dict[int, di
                 if role in evidence:
                     raise NormalizationError("Ambiguous split table header")
                 evidence[role] = cell
+                role_cols[role] = col
         combined_code = [cell for cell in composed.values()
                          if _fold(cell["text"]) == "ma thuyet so minh"]
         if set(evidence) == {"label", "current", "previous"} and len(combined_code) == 1:
@@ -342,6 +344,29 @@ def _table_header(records: list[dict], table: dict, rows: dict[int, dict[int, di
                       for role, cell in evidence.items()}
             if all(col is not None for col in mapped.values()) and len(set(mapped.values())) == 4:
                 return last_header_row, mapped, evidence, "SPLIT_HEADER_LAYOUT_REQUIRES_REVIEW"
+        # One evidenced OCR export assigns the table bbox to every cell. In
+        # that case geometry carries no information, but explicit header col
+        # IDs can still be corroborated by statement codes, labels and values.
+        if (all(cell["bbox"] == table["bbox"] for entries in rows.values()
+                for cell in entries.values()) and len(set(role_cols.values())) == 4):
+            label_col, code_col = role_cols["label"], role_cols["code"]
+            matched, paired_values = 0, 0
+            for row, entries in rows.items():
+                if row <= last_header_row:
+                    continue
+                label, code = entries.get(label_col), entries.get(code_col)
+                metric = METRICS.get(code["text"].strip()) if code else None
+                if label and metric and all(t in _fold(label["text"]) for t in metric[1]):
+                    matched += 1
+                current, previous = entries.get(role_cols["current"]), entries.get(role_cols["previous"])
+                if current and previous:
+                    try:
+                        paired_values += (parse_financial_number(current["text"]) is not None
+                                          and parse_financial_number(previous["text"]) is not None)
+                    except NormalizationError:
+                        pass
+            if matched >= 3 and paired_values >= 3:
+                return last_header_row, role_cols, evidence, "DEGENERATE_BBOX_LAYOUT_REQUIRES_REVIEW"
         raise NormalizationError("Split header columns do not align with data geometry")
 
     # Some OCR exports leave a B02 table header as text blocks above the table.
@@ -350,7 +375,8 @@ def _table_header(records: list[dict], table: dict, rows: dict[int, dict[int, di
         raise NormalizationError("Expected one explicit CHI TIEU/MA SO/NAM NAY/NAM TRUOC header")
     first_row = rows[min(rows)]
     blocks = [r for r in records if r["page"] == table["page"] and r["kind"] == "ocr_block"
-              and 0 <= table["bbox"][1] - r["bbox"][3] <= 200]
+              and 0 <= table["bbox"][1] - r["bbox"][3] <= 200
+              and r["bbox"][1] >= table["bbox"][1] - 130]
     roles, evidence = {}, {}
     for block in blocks:
         label = _fold(block["text"])
@@ -409,10 +435,21 @@ class FinancialNormalizer:
         cells = [r for r in records if r["page"] == page and r["kind"] == "table_cell"
                  and r["table_id"] == table_id]
         rows: dict[int, dict[int, dict]] = defaultdict(dict)
+        ordinal_refs: dict[int, str] = {}
         for cell in cells:
             if cell["col"] in rows[cell["row"]]:
-                raise NormalizationError("Duplicate row/col requires layout review before normalization")
-            rows[cell["row"]][cell["col"]] = cell
+                prior = rows[cell["row"]][cell["col"]]
+                ordinal, label = ((prior, cell) if re.fullmatch(r"\d{1,2}\.", prior["text"].strip())
+                                  else (cell, prior))
+                if (cell["col"] != 0 or cell["row"] in ordinal_refs
+                        or not re.fullmatch(r"\d{1,2}\.", ordinal["text"].strip())
+                        or not any(ch.isalpha() for ch in label["text"])
+                        or ordinal["bbox"][2] >= label["bbox"][0]):
+                    raise NormalizationError("Duplicate row/col requires layout review before normalization")
+                rows[cell["row"]][cell["col"]] = label
+                ordinal_refs[cell["row"]] = ordinal["source_ref"]
+            else:
+                rows[cell["row"]][cell["col"]] = cell
         inferred = _context_from_page(records, table)
         header_row, roles, header_evidence, layout_issue = _table_header(records, table, rows, inferred)
         if set(context.period_overrides) - {roles["current"], roles["previous"]}:
@@ -450,6 +487,9 @@ class FinancialNormalizer:
                     if "code_suffix" in header_evidence:
                         refs["layout"].append(header_evidence["code_suffix"]["source_ref"])
                     reasons.append(layout_issue)
+                if row in ordinal_refs:
+                    refs["row_ordinal"] = [ordinal_refs[row]]
+                    reasons.append("ROW_ORDINAL_COLLISION_REQUIRES_REVIEW")
                 if not mapped:
                     reasons.append("UNMAPPED_OR_CONFLICTING_METRIC")
                 try:
