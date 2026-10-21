@@ -35,7 +35,7 @@ PILOT_TICKERS = ("BTS", "BTW", "BPC")
 FOLDER_MIME = "application/vnd.google-apps.folder"
 PAGE_RE = re.compile(r"page_([1-9][0-9]*)\.(json|png)\Z", re.IGNORECASE)
 ID_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
-RUNNER_VERSION = "1"
+RUNNER_VERSION = "2"
 
 
 def _canonical(value: Any) -> bytes:
@@ -233,7 +233,19 @@ class PilotConfig:
 
 
 def _revision() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    # Documentation-only commits must not invalidate completed data runs.
+    root = Path(__file__).resolve().parents[2]
+    return subprocess.check_output(
+        ["git", "log", "-1", "--format=%H", "--", "financial_multiagent"],
+        cwd=root, text=True,
+    ).strip()
+
+
+def _batch_status_name(config: PilotConfig) -> str:
+    if config.tickers == PILOT_TICKERS and config.years is None:
+        return "batch_status.json"
+    selection = _sha256({"tickers": config.tickers, "years": config.years})[:12]
+    return f"batch_status_selection_{selection}.json"
 
 
 def _tables(bundle_dir: Path) -> list[tuple[int, str]]:
@@ -389,7 +401,7 @@ def run_pilot(service: Any, config: PilotConfig = PilotConfig()) -> list[dict]:
                 output.append({"ticker": ticker, "year": year, "status": "failed",
                                "error_type": type(exc).__name__, "error": str(exc)})
     with tempfile.TemporaryDirectory(prefix="module1-batch-") as temporary:
-        status_path = Path(temporary) / "batch_status.json"
+        status_path = Path(temporary) / _batch_status_name(config)
         _write_json(status_path, {
             "runner_version": RUNNER_VERSION, "code_revision": revision,
             "config_fingerprint": config_fingerprint, "tickers": list(config.tickers),

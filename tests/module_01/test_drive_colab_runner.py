@@ -4,7 +4,7 @@ import json
 import pytest
 
 from financial_multiagent.ingestion.drive_colab_runner import (
-    DriveStore, PilotConfig, _source_identity, _tables,
+    DriveStore, PilotConfig, _batch_status_name, _source_identity, _tables,
 )
 
 
@@ -32,6 +32,14 @@ def test_pilot_does_not_expand_to_other_tickers():
     assert PilotConfig().tickers == ("BTS", "BTW", "BPC")
     with pytest.raises(ValueError):
         PilotConfig(tickers=("CAG",))
+
+
+def test_selected_runs_do_not_replace_full_batch_status():
+    assert _batch_status_name(PilotConfig()) == "batch_status.json"
+    selected = PilotConfig(tickers=("BTW",), years=("2022", "2023"))
+    assert _batch_status_name(selected).startswith("batch_status_selection_")
+    assert _batch_status_name(selected) == _batch_status_name(selected)
+    assert _batch_status_name(selected) != _batch_status_name(PilotConfig(tickers=("BPC",), years=("2024",)))
 
 
 def test_only_primary_income_statement_is_selected(tmp_path):
