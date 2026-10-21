@@ -33,7 +33,7 @@ Batch đầu đã kiểm chứng dưới đây dùng checkout `4dd48a5`; khóa r
 | Thành phần | Hợp đồng |
 |---|---|
 | Source snapshot | Tập `page_N.json` và `page_N.png` liên tục, cùng số trang; Drive ID/size/MD5/thời gian sửa tạo fingerprint. Adapter kiểm SHA-256 bytes, metadata kích thước, bbox và provenance. Bbox OCR vượt trang được ghi nguyên tọa độ vào issue và phần tử đó bị loại khỏi records, không sửa âm thầm. |
-| Crop/signature | Không tải toàn bộ crop. Đường dẫn logic được giữ với `crop_validation=deferred`; sự tồn tại/chất lượng crop chưa được chứng minh. |
+| Crop/signature | Runner chính không tải crop và vẫn ghi `crop_validation=deferred`. Audit độc lập sau đó kiểm **sự tồn tại qua metadata Drive** cho từng crop được tham chiếu; không chứng minh chất lượng ảnh hay nội dung chữ ký. |
 | OCR quality | Kiểm tra xác định trên toàn bộ adapter bundle; ảnh trang chỉ dùng để kiểm hash/kích thước. Độ chính xác ký tự thị giác chưa được đo. |
 | FinancialFact | Normalizer hiện nhận đúng bảng B02 chính có tên `Báo cáo kết quả hoạt động kinh doanh`; loại các bảng thuyết minh có tên chỉ chứa cụm này. Header `Năm nay/Năm trước`, header năm tường minh, header tách nhiều hàng và header OCR nằm ngoài bảng được nhận khi cột và mã chỉ tiêu đối chiếu được. Bbox của mọi ô bằng bbox cả bảng chỉ tạo candidate khi mã/nhãn và hai cột số đều corroborate, với `DEGENERATE_BBOX_LAYOUT_REQUIRES_REVIEW`. Số thứ tự và nhãn trùng `row/col` chỉ tách khi hai bbox không chồng nhau, với `ROW_ORDINAL_COLLISION_REQUIRES_REVIEW`. Header tách hàng/ngoài bảng và cột so sánh trình bày lại giữ issue riêng. Metadata kỳ, phạm vi, accounting basis thiếu vẫn ở `needs_review`; trường hợp mơ hồ khác vẫn bị chặn. Bảng khác chưa được chuẩn hóa. |
 | C1 | Chạy theo từng normalization run. Không có rule registry đã duyệt nên kết luận pháp lý là `unknown`; sai lệch kế toán không tự thành vi phạm. |
@@ -76,5 +76,18 @@ Lượt chạy chọn riêng với commit code `c4b888c` tạo `completion.json`
 | BPC/2024 | 38 | 18 `unknown` | Mã `01`: 2024 `268.905.178.795`, 2023 `227.638.128.651`, đối chiếu PNG trang 7. Số thứ tự OCR trùng cột nhãn được giữ ref và issue; mọi fact giữ review. |
 
 Gộp artifact tốt nhất của từng báo cáo từ **hai phiên bản code khác nhau** hiện có 544 fact ứng viên B02 và 270 kết quả C1 `unknown` trên 15 báo cáo. Đây không phải một batch đồng nhất phiên bản; không dùng số gộp như kết quả đánh giá độ chính xác hoặc tính tuân thủ.
+
+### Audit crop/chữ ký trên Drive
+
+Ngày 21/10/2026, script [run_crop_audit_batch.py](../colab/run_crop_audit_batch.py) chạy trên Colab cho **15/15** báo cáo pilot, không có lỗi job. Script đọc `elements.jsonl` và `drive_source_map.json` từ các run đã hoàn thành, liệt kê metadata của `ocr_crops` trong Drive 1, rồi ghi báo cáo theo mã/năm vào [crop_audits trên Drive 3](https://drive.google.com/drive/folders/1JR24zLSjKwJG1cltT1tzjsaXpePnSkZk). Lệnh từ root repo Colab: `PYTHONPATH=. python colab/run_crop_audit_batch.py`. Việc này không tải toàn bộ ảnh crop và không sửa Drive nguồn.
+
+| Mã | Crop ref duy nhất | Tìm thấy | Thiếu đúng đường dẫn |
+|---|---:|---:|---:|
+| BTS, 2021–2025 | 1.620 | 1.252 | 368 |
+| BTW, 2021–2025 | 1.347 | 1.231 | 116 |
+| BPC, 2021–2025 | 991 | 935 | 56 |
+| **Tổng** | **3.958** | **3.418** | **540** |
+
+Mỗi báo cáo audit ghi `elements_drive_file_id`, MD5 của adapter artifact, ID/MD5/size của crop tìm thấy và `source_ref` của các tham chiếu thiếu. Không có ref sai cú pháp hoặc tên Drive trùng trong lượt này. Ví dụ [BPC/2024](https://drive.google.com/file/d/1WRDLFhD9jjqJjMFK4bDa-bYNuMbVN-w8/view) có 205 ref tìm thấy, 6 ref thiếu. `missing` chỉ có nghĩa file không tồn tại tại **đường dẫn OCR được tham chiếu** trong snapshot metadata; nguyên nhân thiếu là `TBD`. Audit không đọc pixel, xác thực chữ ký hay làm thay đổi trạng thái `needs_review` của fact.
 
 **Việc còn lại của Module 1 theo kiến trúc đích:** xác minh các fact và sửa lỗi OCR còn lại; bổ sung PDF gốc khi có và kiểm crop/chữ ký; mở rộng chuẩn hóa ra các bảng cân đối kế toán, lưu chuyển tiền tệ, thuyết minh và quan hệ kỳ/phạm vi; từ [danh mục văn bản C1 ứng viên](11-c1-legal-source-candidates.md) xây rule registry có phiên bản, hiệu lực, ngoại lệ và C1 đầy đủ; cưỡng chế ACL ở storage/retrieval/database; publish có kiểm soát sang Knowledge Storage/C2. Các nguồn và quyết định chưa có được giữ `TBD`; pilot này chưa chuyển document sang `ready`.
