@@ -16,11 +16,13 @@ flowchart LR
 
 ## Level 1 — đầu vào, đầu ra và resume
 
-**Đầu vào:** ID ba thư mục Drive trong [link_drive.txt](link_drive.txt), quyền Google của runtime Colab, commit Git, `access_scope`, tập mã và năm được chọn. Notebook [00_module1_drive_pilot.ipynb](../colab/00_module1_drive_pilot.ipynb) mặc định chạy mọi năm có trong ba mã pilot; có thể đặt `YEARS = ('2025',)` để thử một năm. Runner từ chối mã ngoài BTS/BTW/BPC. Chạy full các mã khác là công việc riêng theo yêu cầu sau của người dùng.
+**Đầu vào:** ID ba thư mục Drive trong [link_drive.txt](link_drive.txt), quyền Google của runtime Colab, commit Git, `access_scope`, tập mã và năm được chọn. Runner `PilotConfig()` mặc định chạy mọi năm có trong ba mã pilot. Notebook [00_module1_drive_pilot.ipynb](../colab/00_module1_drive_pilot.ipynb) hiện lưu `YEARS = ('2025',)` từ lượt thử trước; đặt `YEARS = None` nếu chạy lại toàn bộ pilot. Runner từ chối mã ngoài BTS/BTW/BPC. Chạy full các mã khác là công việc riêng theo yêu cầu sau của người dùng.
 
 **Đầu ra mỗi báo cáo:** `manifest.json`, `elements.jsonl`, `drive_source_map.json`, quality report/issues, normalization runs của bảng được hỗ trợ, C1 runs tương ứng và `pilot_summary.json`. `completion.json` được upload **cuối cùng**. Mỗi file trong completion marker có ID và MD5 của Drive. `batch_status.json` ở thư mục pilot tổng hợp báo cáo đã chạy, bỏ qua hoặc lỗi. Source map lưu ID file nguồn; tham chiếu trong adapter vẫn là đường dẫn logic, không là đường dẫn tạm của Colab.
 
 **Resume:** tên run gắn fingerprint metadata của toàn bộ JSON/PNG nguồn, commit Git và config. Khi chạy lại, runner kiểm completion marker và MD5 của từng artifact trên Drive. Chỉ khi chúng khớp mới bỏ qua báo cáo. Nguồn/code/config đổi sẽ tạo run mới; báo cáo lỗi hoặc upload dở được xử lý lại, còn artifact đã upload đúng MD5 được bỏ qua khi upload lại. Kết quả cũ không bị ghi đè bởi run khác phiên bản.
+
+Run đã kiểm chứng dưới đây dùng checkout `4dd48a5`. Khi tiếp tục chính batch này, cần giữ checkout đó: `git pull` lên commit mới, kể cả commit chỉ sửa tài liệu, sẽ đổi Git SHA mà runner dùng để nhận diện run và tạo một lượt xử lý mới. Đây là giới hạn hiện tại của khóa resume; trước khi mở rộng ra các mã khác cần chốt cách nhận diện phiên bản code để không tải lại pilot vì thay đổi tài liệu. Lượt retry BTS/2025 dùng `httplib2.Http(timeout=180)` cho Drive API sau khi request mặc định bị timeout.
 
 **Phụ thuộc:** Google Colab, OAuth Drive API, `google-api-python-client`, quyền đọc hai folder nguồn và quyền ghi `multi_agent_financial`, GitHub repo sẵn sàng clone/pull. PDF gốc, rule registry production và publish sang C2 chưa được cung cấp qua luồng này.
 
