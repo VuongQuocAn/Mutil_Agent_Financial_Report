@@ -2,7 +2,9 @@
 
 **Trạng thái:** đã chạy pilot trên Colab cho BTS, BTW, BPC, mỗi mã từ 2021 đến 2025, với commit `4dd48a5`; ba layout B02 cần rà soát được xử lý thêm bằng commit code `c4b888c`. Cả 15 báo cáo có checkpoint trên [Drive 3](https://drive.google.com/drive/folders/15NHeju4YoIftMayvZYl1DAJVE5iKER5H). Đây là cách triển khai nhánh dữ liệu OCR có sẵn, không thay phạm vi kiến trúc Module 1/C1–C5. Xem [Level 0](00-overview.md), [Module 1](01-document-ingestion.md), [C1](01c-c1-validation.md) và [bàn giao Drive](09-drive-colab-handoff.md).
 
-Xem thêm [chính sách chịu lỗi OCR và mở rộng batch](12-module-1-resilience.md) cho trạng thái từng bảng, checkpoint và kết quả B01/B03 thử nghiệm.
+Xem thêm [chính sách chịu lỗi OCR và mở rộng batch](12-module-1-resilience.md) cho trạng thái từng bảng, checkpoint và kết quả B01/B03 thử nghiệm; [hợp đồng bàn giao pilot](13-module-1-pilot-handoff.md) cho đầu vào của module sau.
+
+**Cập nhật bàn giao:** gói `handoff.json` cho 15/15 báo cáo đã được tạo và kiểm checksum trên [Drive 3](https://drive.google.com/drive/folders/1SvEPX4Ompy79ltJEHoNYaW3NlXUiYbWi). OCR có cảnh báo vẫn được giữ để module sau đọc theo nguồn; việc này không nâng fact lên trạng thái đã xác minh hay thay C1 `unknown`.
 
 ## Level 0 — luồng và mục đích
 

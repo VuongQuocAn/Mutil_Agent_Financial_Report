@@ -1,20 +1,20 @@
 # Level 1 — Document Ingestion, OCR, Normalization và C1 Validation
 
-**Loại tài liệu:** Technical Design Specification · **Trạng thái:** đã có adapter, OCR quality, normalization B02, engine C1 và pilot Drive · Git · Colab cho 15 báo cáo BTS/BTW/BPC; full ingestion, nguồn rule đã duyệt và tích hợp kho tri thức còn chưa hoàn tất.
+**Loại tài liệu:** Technical Design Specification · **Trạng thái:** đã có adapter, OCR quality, fact ứng viên B01/B02/B03, engine C1 và gói bàn giao pilot Drive · Git · Colab cho 15 báo cáo BTS/BTW/BPC; full ingestion, nguồn rule đã duyệt và tích hợp kho tri thức còn chưa hoàn tất.
 **Tài liệu cha:** [Level 0](00-overview.md) · **Quy chuẩn:** [Technical Writing Standard](TECHNICAL_WRITING_STANDARD.md)  
 **Liên quan:** [C2 và kho tri thức — dự kiến](02-knowledge-and-graph.md), [truy vấn và retrieval — dự kiến](03-query-and-retrieval.md), [C5 — dự kiến](06-evaluation-monitoring.md)
 
 **Thiết kế và tiến độ bước quality:** [OCRQualityReport](01a-ocr-quality-report-plan.md).
 
-**Triển khai pilot Drive · Git · Colab:** [BTS/BTW/BPC 2021–2025 và audit crop](10-module-1-colab-pilot.md). **Nguồn quy định C1:** [danh mục ứng viên](11-c1-legal-source-candidates.md), chưa phải registry đã duyệt.
+**Triển khai pilot Drive · Git · Colab:** [BTS/BTW/BPC 2021–2025 và audit crop](10-module-1-colab-pilot.md), [hợp đồng bàn giao pilot](13-module-1-pilot-handoff.md). **Nguồn quy định C1:** [danh mục ứng viên](11-c1-legal-source-candidates.md), chưa phải registry đã duyệt.
 
 **Bước normalization đã có:** [lát cắt một bảng kết quả kinh doanh](01b-financial-normalization.md) và [notebook 02](../colab/02_financial_normalization.ipynb). Đây là candidate contract với metadata nullable và decimal ở đơn vị cơ sở; schema published rút gọn bên dưới chưa phải hợp đồng cuối. Full VAS/IFRS/restatement mapping và rule extraction còn cần triển khai; engine financial consistency/C1 đã có ở tài liệu con bên dưới.
 
-**Kiểm thử hiện tại:** `python -m pytest tests/module_01 -q -rs` đạt 104 passed, 2 skipped ngày 21/10/2026. Hai skip là ca cần quyền symlink Windows và ca cần mẫu BTS cục bộ không có ở đường dẫn test. Runner normalization/C1 đã chạy trên Colab cho pilot; các fact vẫn cần review.
+**Kiểm thử hiện tại:** `python -m pytest tests/module_01 -q -rs` đạt 110 passed, 2 skipped ngày 21/10/2026. Hai skip là ca cần quyền symlink Windows và ca cần mẫu BTS cục bộ không có ở đường dẫn test. Runner normalization/C1 đã chạy trên Colab cho pilot; các fact vẫn cần review.
 
 **C1 đã có:** [thiết kế và giới hạn](01c-c1-validation.md), [notebook 03](../colab/03_c1_validation.ipynb), [cấu trúc repo](07-repository-structure.md). Sáu thành phần C1 được giữ; pháp lý nhận registry có review/provenance, default rỗng trả unknown. Rule extraction tự động và publish vào C2 còn cần triển khai. Các trạng thái “chưa triển khai” bên dưới mô tả lịch sử hoặc kiến trúc đích; đây là cập nhật hiện hành của C1.
 
-**Kiểm thử toàn repo:** `python -m pytest -q -rs` đạt 166 passed, 3 skipped ngày 21/10/2026. Một skip integration C1 do thiếu normalization BTS local ở version hiện tại; hai skip Module 1 nêu trên. Kết quả `unknown` không được chuyển thành `pass` chỉ vì phép tính số học khớp.
+**Kiểm thử toàn repo:** `python -m pytest -q -rs` đạt 172 passed, 3 skipped ngày 21/10/2026. Một skip integration C1 do thiếu normalization BTS local ở version hiện tại; hai skip Module 1 nêu trên. Kết quả `unknown` không được chuyển thành `pass` chỉ vì phép tính số học khớp.
 
 **Cập nhật triển khai:** pilot và audit crop được ghi riêng trong tài liệu liên kết phía trên. Không tự nâng document lên `ready`; regulation extraction và nguồn rule đã duyệt còn chưa có. Các số liệu kiểm thử adapter bên dưới là lịch sử của lần chạy trước.
 

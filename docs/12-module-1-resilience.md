@@ -1,6 +1,6 @@
 # Module 1 — chịu lỗi OCR và mở rộng batch
 
-Tài liệu này bổ sung [pilot Module 1](10-module-1-colab-pilot.md) và [luồng ingestion](01-document-ingestion.md). Đây là chiến lược triển khai cho nhánh OCR có sẵn; kiến trúc đích C1–C5 trong [Level 0](00-overview.md) vẫn giữ nguyên.
+Tài liệu này bổ sung [pilot Module 1](10-module-1-colab-pilot.md), [hợp đồng bàn giao](13-module-1-pilot-handoff.md) và [luồng ingestion](01-document-ingestion.md). Đây là chiến lược triển khai cho nhánh OCR có sẵn; kiến trúc đích C1–C5 trong [Level 0](00-overview.md) vẫn giữ nguyên.
 
 ## Level 0 — luồng và mục đích
 
@@ -46,3 +46,5 @@ Kiểm tra mở rộng phải dựa trên **tỷ lệ bảng/báo cáo được 
 Ngày 21/10/2026, batch B01/B03 phiên bản đầu hoàn tất 15/15 báo cáo trên Drive 3: 49 bảng được nhận diện, 25 bảng sinh 1.047 fact ứng viên, 24 bảng không sinh fact. BTW/2021–2023 có 0 fact B01/B03; lý do chủ yếu là không xác định được cặp header hiện tại/kỳ trước, một số bảng không có hàng số rõ. BPC/2021–2025 có fact B03 nhưng B01 thiếu cặp header. Các fact đều cần rà soát. Batch đầu chỉ ghi `processed` ở cấp báo cáo; trạng thái coverage và gộp artifact theo báo cáo là code bổ sung sau batch đó.
 
 **Kiểm chứng code mới:** [BPC/2021 trên Drive 3](https://drive.google.com/drive/folders/1xNQOT6w6597FHjDSPLvM2eJHTDU-UuLs) chạy với `processed_with_gaps`: 1 bảng trích được 51 fact, 2 bảng `quarantined`. Chạy lại cùng nguồn/code/config trả `skipped_completed`; không tải lại OCR để sửa hai bảng thiếu header. Batch 15 báo cáo của phiên bản mới chưa chạy, nên số tổng hợp ở trên vẫn là kết quả phiên bản đầu.
+
+Module 1 đã [bàn giao cả 15 báo cáo](13-module-1-pilot-handoff.md) bằng manifest gắn nguồn và cảnh báo, dùng kết quả batch đầu cho B01/B03 và run phù hợp nguồn cho B02. Không cần chạy lại normalization chỉ để tạo handoff.
