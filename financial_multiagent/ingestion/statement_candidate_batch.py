@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import tempfile
 from typing import Any
 
@@ -13,7 +14,7 @@ from .drive_colab_runner import (
 from .financial_normalization import NormalizationContext, NormalizationError
 from .statement_candidates import normalize_statement_table, statement_kind
 
-BATCH_VERSION = "2"
+BATCH_VERSION = "3"
 
 
 def summarize_table_coverage(tables: list[dict]) -> dict:
@@ -30,7 +31,7 @@ def summarize_table_coverage(tables: list[dict]) -> dict:
     }
 
 
-def run_statement_candidate_batch(service: Any) -> list[dict]:
+def run_statement_candidate_batch(service: Any, *, selection: set[tuple[str, str]] | None = None) -> list[dict]:
     store = DriveStore(service)
     revision = _revision()
     config = _sha256({"stage": "B01_B03_candidates", "version": BATCH_VERSION,
@@ -39,10 +40,15 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
     status = store.read_result_json(pilot, "batch_status.json")
     if status is None or len(status.get("reports", [])) != 15:
         raise ValueError("Expected the completed 15-report pilot status")
+    available = {(entry["ticker"], entry["year"]) for entry in status["reports"]}
+    if selection is not None and (not selection or not selection <= available):
+        raise ValueError("Selection must contain reports in the completed pilot")
     candidates_root = store.ensure_result_folder(pilot, "statement_candidates")
     output = []
     for entry in status["reports"]:
         ticker, year = entry["ticker"], entry["year"]
+        if selection is not None and (ticker, year) not in selection:
+            continue
         if ticker not in PILOT_TICKERS:
             raise ValueError("Input contains a ticker outside the pilot")
         try:
@@ -71,6 +77,8 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
                     store.download({"id": meta["id"], "name": name, "size": meta["size"],
                                     "md5Checksum": meta["md5"]}, bundle / name)
                 results_dir = base / "result"
+                results_dir.mkdir()
+                table_runs_dir = base / "table_runs"
                 tables = []
                 with (bundle / "elements.jsonl").open(encoding="utf-8") as stream:
                     for line in stream:
@@ -79,6 +87,7 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
                         if kind:
                             tables.append((record["page"], record["element_id"], kind))
                 table_results = []
+                table_run_paths = []
                 for page, table_id, kind in tables:
                     item = {"page": page, "table_id": table_id, "statement_kind": kind}
                     try:
@@ -86,21 +95,29 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
                             bundle, page=page, table_id=table_id, access_scope="pilot-drive-scope",
                             context=NormalizationContext(company_id=ticker,
                                 company_evidence="Drive folder ticker matches OCR symbol; legal entity not verified"),
-                            output_dir=results_dir / "normalization",
+                            output_dir=table_runs_dir,
                         )
+                        table_run_paths.append(Path(normalized["output_dir"]))
                         item.update(table_status="extracted", run_id=normalized["run_id"],
                                     fact_count=normalized["fact_count"],
                                     mapped_metric_count=normalized["mapped_metric_count"],
+                                    issue_counts=normalized["issue_counts"],
                                     quality_status=normalized["quality_status"])
                     except NormalizationError as exc:
                         item.update(table_status="quarantined", quality_status="needs_review",
                                     reason=str(exc), fact_count=0, mapped_metric_count=0)
                     table_results.append(item)
                 coverage = summarize_table_coverage(table_results)
+                for filename in ("financial_facts.jsonl", "normalization_issues.jsonl"):
+                    with (results_dir / filename).open("wb") as merged:
+                        for run_path in table_run_paths:
+                            with (run_path / filename).open("rb") as source_stream:
+                                shutil.copyfileobj(source_stream, merged)
                 summary = {"schema_version": "1", "batch_version": BATCH_VERSION,
                            "ticker": ticker, "year": year, "source_fingerprint": source,
                            "code_revision": revision, "config_fingerprint": config,
                            **coverage, "fact_count": coverage["candidate_fact_count"],
+                           "artifact_layout": "one candidate and issue JSONL per report",
                            "tables": table_results, "quality_status": "needs_review",
                            "limitations": ["Numeric B01/B03 candidates require source and metadata review.",
                                            "Quarantined tables may require a separate OCR/layout review.",
@@ -128,7 +145,9 @@ def run_statement_candidate_batch(service: Any) -> list[dict]:
             output.append(result)
             print(json.dumps(result), flush=True)
     with tempfile.TemporaryDirectory(prefix="statement-batch-") as temporary:
-        path = Path(temporary) / "batch_status.json"
+        suffix = "" if selection is None else "_selection_" + "_".join(
+            f"{ticker}_{year}" for ticker, year in sorted(selection))
+        path = Path(temporary) / f"batch_status{suffix}.json"
         _write_json(path, {"batch_version": BATCH_VERSION, "code_revision": revision,
                            "config_fingerprint": config, "reports": output})
         store.upload_result(candidates_root, path)
