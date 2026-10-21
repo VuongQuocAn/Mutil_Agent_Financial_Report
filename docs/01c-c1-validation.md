@@ -1,6 +1,6 @@
 # C1 — Contextual validation
 
-**Trạng thái:** có engine, runner, schemas, notebook và test local; nguồn quy định production và notebook Drive thực tế chưa được xác nhận. [Cha: Module 1](01-document-ingestion.md) · [Level 0](00-overview.md) · [Cấu trúc repo](07-repository-structure.md).
+**Trạng thái:** có engine, runner, schemas, notebook và test local; nguồn quy định production và notebook Drive thực tế chưa được xác nhận. [Cha: Module 1](01-document-ingestion.md) · [Level 0](00-overview.md) · [Cấu trúc repo](07-repository-structure.md) · [Nguồn quy định ứng viên cho pilot](11-c1-legal-source-candidates.md).
 
 ## 1. Mục tiêu và trách nhiệm
 
